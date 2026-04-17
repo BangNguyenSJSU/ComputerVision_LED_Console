@@ -2,9 +2,9 @@ namespace ComputerVision_LED_Console.Config
 {
     public class NetworkConfig
     {
-        public bool HttpEnabled { get; set; } = false;
+        public bool HttpEnabled { get; set; } = true;
         public string HttpBindAddress { get; set; } = "127.0.0.1";
-        public int HttpPort { get; set; } = 8080;
+        public int HttpPort { get; set; } = 18080;
 
         public bool TcpEnabled { get; set; } = false;
         public string TcpBindAddress { get; set; } = "127.0.0.1";
