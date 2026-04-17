@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace ComputerVision_LED_Console.Camera
 {
@@ -10,7 +11,7 @@ namespace ComputerVision_LED_Console.Camera
         double FramesPerSecond { get; }
 
         bool Open();
-        bool TryReadFrame(out FrameData frame);
+        bool TryReadFrame([NotNullWhen(true)] out FrameData? frame);
         void Close();
     }
 }

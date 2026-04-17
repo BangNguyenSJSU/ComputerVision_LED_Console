@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ComputerVision_LED_Console.Camera;
 using ComputerVision_LED_Console.Config;
 using ComputerVision_LED_Console.Models;
 using OpenCvSharp;
@@ -31,35 +32,14 @@ namespace ComputerVision_LED_Console
         {
             _config = new AppConfig();
 
-            int selectedIndex = SelectCamera(_config.Camera.MaxProbeIndex);
-            if (selectedIndex < 0)
+            using var camera = new OpenCvCameraSource(_config.Camera);
+            if (!camera.Open())
             {
                 return;
             }
 
-            using var capture = new VideoCapture(selectedIndex, VideoCaptureAPIs.DSHOW);
+            DisplayScale = camera.FrameWidth > 1280 ? 1280.0 / camera.FrameWidth : 1.0;
 
-            if (!capture.IsOpened())
-            {
-                Console.WriteLine($"Failed to open camera at index {selectedIndex}.");
-                return;
-            }
-
-            // Request MJPEG so high-res USB webcams fit in USB bandwidth;
-            // cap resolution and buffer so a 4K camera does not stall the pipeline.
-            string fourCc = _config.Camera.FourCC;
-            capture.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC(fourCc[0], fourCc[1], fourCc[2], fourCc[3]));
-            capture.Set(VideoCaptureProperties.FrameWidth, _config.Camera.FrameWidth);
-            capture.Set(VideoCaptureProperties.FrameHeight, _config.Camera.FrameHeight);
-            capture.Set(VideoCaptureProperties.Fps, _config.Camera.TargetFps);
-            capture.Set(VideoCaptureProperties.BufferSize, _config.Camera.BufferSize);
-
-            int frameWidth = (int)capture.Get(VideoCaptureProperties.FrameWidth);
-            int frameHeight = (int)capture.Get(VideoCaptureProperties.FrameHeight);
-            double actualFps = capture.Get(VideoCaptureProperties.Fps);
-            DisplayScale = frameWidth > 1280 ? 1280.0 / frameWidth : 1.0;
-
-            Console.WriteLine($"Using camera index {selectedIndex} at {frameWidth}x{frameHeight} @ {actualFps:F1} fps.");
             Console.WriteLine("Controls: Q/ESC=quit | R=rescan | Left-click=add/drag | Right-click=delete");
             Console.WriteLine($"Per-LED thresholds (defaults On={_config.Detection.DefaultOnThreshold}, Off={_config.Detection.DefaultOffThreshold}). Left-click an LED to select it.");
             Console.WriteLine("  - C = auto-calibrate selected LED: press while lit, then press again while dark.");
@@ -67,7 +47,6 @@ namespace ComputerVision_LED_Console
             Console.WriteLine("  - ; / '  nudge Off threshold by 5 (down / up).");
             Console.WriteLine($"  - Minimum gap of {_config.Detection.MinThresholdGap} is enforced to prevent flicker.");
 
-            using var frame = new Mat();
             bool initialized = false;
 
             Cv2.NamedWindow(WindowName);
@@ -75,12 +54,13 @@ namespace ComputerVision_LED_Console
 
             while (true)
             {
-                capture.Read(frame);
-
-                if (frame.Empty())
+                if (!camera.TryReadFrame(out var frameData))
                 {
                     continue;
                 }
+
+                using var fd = frameData;
+                Mat frame = fd.Frame;
 
                 if (!initialized)
                 {
@@ -244,7 +224,6 @@ namespace ComputerVision_LED_Console
                 }
             }
 
-            capture.Release();
             Cv2.DestroyAllWindows();
         }
 
@@ -381,65 +360,6 @@ namespace ComputerVision_LED_Console
                 }
             }
             return -1;
-        }
-
-        static int SelectCamera(int maxIndexToProbe = 5)
-        {
-            Console.WriteLine("Scanning for available cameras...");
-            var available = new List<int>();
-
-            for (int i = 0; i <= maxIndexToProbe; i++)
-            {
-                using var probe = new VideoCapture(i, VideoCaptureAPIs.DSHOW);
-                if (!probe.IsOpened())
-                {
-                    continue;
-                }
-
-                using var testFrame = new Mat();
-                probe.Read(testFrame);
-                if (!testFrame.Empty())
-                {
-                    available.Add(i);
-                }
-            }
-
-            if (available.Count == 0)
-            {
-                Console.WriteLine("No cameras detected.");
-                return -1;
-            }
-
-            Console.WriteLine("Available cameras:");
-            for (int i = 0; i < available.Count; i++)
-            {
-                string hint = available[i] == 0 ? " (typically integrated webcam)" : " (external / secondary)";
-                Console.WriteLine($"  [{i}] Camera index {available[i]}{hint}");
-            }
-
-            if (available.Count == 1)
-            {
-                Console.WriteLine("Only one camera found — selecting it automatically.");
-                return available[0];
-            }
-
-            while (true)
-            {
-                Console.Write($"Select a camera [0-{available.Count - 1}] (Enter for 0): ");
-                string? input = Console.ReadLine();
-
-                if (string.IsNullOrWhiteSpace(input))
-                {
-                    return available[0];
-                }
-
-                if (int.TryParse(input, out int choice) && choice >= 0 && choice < available.Count)
-                {
-                    return available[choice];
-                }
-
-                Console.WriteLine("Invalid selection, try again.");
-            }
         }
 
         static Rect ClampRectToFrame(Rect rect, int frameWidth, int frameHeight)

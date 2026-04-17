@@ -14,6 +14,6 @@ namespace ComputerVision_LED_Console.Camera
             TimestampUtc = timestampUtc;
         }
 
-        public void Dispose() => Frame?.Dispose();
+        public void Dispose() => Frame.Dispose();
     }
 }
