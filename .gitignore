@@ -1,0 +1,56 @@
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+
+# Rider / ReSharper
+.idea/
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Tools / misc
+*.pdb
+*.cache
+*.tmp
+*.bak
+*.swp
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# OS
+.DS_Store
+
+# Claude Code — keep shared config (settings.json, agents/, commands/, hooks/)
+# but exclude personal overrides and ephemeral state.
+.claude/settings.local.json
+.claude/.cache/
+.claude/logs/
