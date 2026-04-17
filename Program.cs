@@ -31,6 +31,10 @@ namespace ComputerVision_LED_Console
             {
                 publishers.Add(new TcpStatusServer(config.Network, status));
             }
+            if (config.Network.TcpBinaryEnabled)
+            {
+                publishers.Add(new TcpBinaryStatusServer(config.Network, status));
+            }
 
             var app = new AppController(config, camera, detector, status, time, renderer, input, state, publishers);
             app.Run();

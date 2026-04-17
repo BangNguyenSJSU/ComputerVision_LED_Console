@@ -288,6 +288,113 @@ asyncio.run(consume())
 
 ---
 
+## Binary TCP stream
+
+Default endpoint: `127.0.0.1:9091`
+
+A compact byte-oriented alternative to the JSON TCP stream — intended for microcontrollers, custom dashboards, or any consumer that doesn't want to parse JSON. Each LED is encoded in 2 bytes, and each tick is framed with a 1-byte count so the receiver can delimit snapshots.
+
+Server is opt-in via `NetworkConfig.TcpBinaryEnabled`. It runs independently of the JSON TCP stream — both can be enabled at the same time on separate ports.
+
+### Wire format
+
+Per captured frame, one self-delimiting frame is written:
+
+```
++---+----+----+----+----+ ... +----+----+
+| N | i1 | s1 | i2 | s2 | ... | iN | sN |
++---+----+----+----+----+ ... +----+----+
+  1    1    1    1    1   ...    1    1   bytes
+```
+
+- `N` — LED count, unsigned byte (0–255).
+- `iK` — `MarkerId` as an unsigned byte. **Markers with `MarkerId > 255` are skipped** from the binary stream (a warn log is emitted once per overflow id). The JSON stream still reports them.
+- `sK` — `LedStatus` as an unsigned byte:
+  - `0x00` = `Unknown`
+  - `0x01` = `Off`
+  - `0x02` = `On`
+
+When no markers exist, a single `0x00` byte is sent per tick — this acts as a heartbeat and keeps the tick cadence predictable.
+
+Example: 2 LEDs, id=1 ON, id=2 OFF → `02 01 02 02 01` (5 bytes).
+
+### Python — streaming reader
+
+```python
+import socket
+
+HOST, PORT = "127.0.0.1", 9091
+STATUS = {0: "Unknown", 1: "Off", 2: "On"}
+
+with socket.create_connection((HOST, PORT)) as sock:
+    buf = b""
+    while True:
+        chunk = sock.recv(4096)
+        if not chunk:
+            break
+        buf += chunk
+        while buf:
+            n = buf[0]
+            frame_len = 1 + n * 2
+            if len(buf) < frame_len:
+                break
+            frame = buf[:frame_len]
+            payload = frame[1:]
+            buf = buf[frame_len:]
+            print(f"raw: {frame.hex(' ')}")
+            for i in range(n):
+                mid, st = payload[2 * i], payload[2 * i + 1]
+                print(f"  LED #{mid}: {STATUS.get(st, '?')}")
+```
+
+Example output for a tick with 2 LEDs (id=1 ON, id=2 OFF):
+
+```
+raw: 02 01 02 02 01
+  LED #1: On
+  LED #2: Off
+```
+
+### Python — only act on edges
+
+```python
+import socket
+
+HOST, PORT = "127.0.0.1", 9091
+STATUS = {0: "Unknown", 1: "Off", 2: "On"}
+last = {}
+
+with socket.create_connection((HOST, PORT)) as sock:
+    buf = b""
+    while True:
+        chunk = sock.recv(4096)
+        if not chunk:
+            break
+        buf += chunk
+        while buf:
+            n = buf[0]
+            frame_len = 1 + n * 2
+            if len(buf) < frame_len:
+                break
+            payload = buf[1:frame_len]
+            buf = buf[frame_len:]
+            for i in range(n):
+                mid, st = payload[2 * i], payload[2 * i + 1]
+                if last.get(mid) != st:
+                    last[mid] = st
+                    print(f"LED #{mid} -> {STATUS.get(st, '?')}")
+```
+
+### Quick sanity check with ncat
+
+```bash
+ncat 127.0.0.1 9091 | xxd
+```
+
+You should see ~60 short rows per second, each starting with a count byte.
+
+---
+
 ## Troubleshooting
 
 **"No cameras detected."**
@@ -309,6 +416,9 @@ Raise `DetectionConfig.DefaultOnThreshold` or lower `DefaultOffThreshold` to wid
 
 **TCP client disconnected silently**
 Each status tick writes to every connected client. A dead socket is detected on write failure and removed. Your reader should reconnect if it sees a closed connection.
+
+**Binary TCP port `9091` won't bind**
+Something else on the host owns the port. The app logs `[ERROR]` and continues without the binary stream. Change `NetworkConfig.TcpBinaryPort` or free the port — `netstat -ano | findstr :9091` identifies the PID.
 
 **App exits immediately after "Using camera index..."**
 OpenCvSharp native runtime is missing. Confirm the `OpenCvSharp4.runtime.win` NuGet package restored. A full `dotnet clean && dotnet restore && dotnet build` usually fixes it.
