@@ -54,3 +54,6 @@ Desktop.ini
 .claude/settings.local.json
 .claude/.cache/
 .claude/logs/
+
+# VS upgrade-wizard scaffolding (tool output, not project code)
+.github/upgrades/

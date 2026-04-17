@@ -208,7 +208,7 @@ namespace ComputerVision_LED_Console
                     DetectYellowLeds(frame);
                 }
 
-                LedMarker sel = (SelectedIndex >= 0 && SelectedIndex < Markers.Count)
+                LedMarker? sel = (SelectedIndex >= 0 && SelectedIndex < Markers.Count)
                     ? Markers[SelectedIndex] : null;
 
                 if (sel != null)
@@ -421,7 +421,7 @@ namespace ComputerVision_LED_Console
             while (true)
             {
                 Console.Write($"Select a camera [0-{available.Count - 1}] (Enter for 0): ");
-                string input = Console.ReadLine();
+                string? input = Console.ReadLine();
 
                 if (string.IsNullOrWhiteSpace(input))
                 {
