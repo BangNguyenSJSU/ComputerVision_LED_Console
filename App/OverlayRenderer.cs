@@ -12,11 +12,11 @@ namespace ComputerVision_LED_Console.App
         private static readonly Scalar HudColor = new(0, 0, 0);      // black
         private static readonly Scalar WarnColor = new(0, 0, 255);   // red
 
-        private readonly double _displayScale;
+        private readonly AppState _state;
 
-        public OverlayRenderer(double displayScale)
+        public OverlayRenderer(AppState state)
         {
-            _displayScale = displayScale;
+            _state = state;
         }
 
         public void RenderAndShow(
@@ -104,10 +104,11 @@ namespace ComputerVision_LED_Console.App
         {
             // Downscale for display when the frame is larger than ~1280 wide so
             // rendering doesn't back-pressure the capture pipeline.
-            if (_displayScale < 1.0)
+            double scale = _state.DisplayScale;
+            if (scale < 1.0)
             {
                 using var shown = new Mat();
-                Cv2.Resize(displayFrame, shown, new Size(), _displayScale, _displayScale, InterpolationFlags.Area);
+                Cv2.Resize(displayFrame, shown, new Size(), scale, scale, InterpolationFlags.Area);
                 Cv2.ImShow(windowName, shown);
             }
             else
