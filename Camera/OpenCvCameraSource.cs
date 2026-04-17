@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using ComputerVision_LED_Console.Config;
+using ComputerVision_LED_Console.Utilities;
 using OpenCvSharp;
 
 namespace ComputerVision_LED_Console.Camera
@@ -23,7 +24,7 @@ namespace ComputerVision_LED_Console.Camera
 
         public bool Open()
         {
-            Console.WriteLine("Scanning for available cameras...");
+            Logger.Info("Scanning for available cameras...");
             var available = CameraProbe.ScanAvailable(_config.MaxProbeIndex);
             int chosen = CameraProbe.PromptUserSelection(available);
             if (chosen < 0)
@@ -34,7 +35,7 @@ namespace ComputerVision_LED_Console.Camera
             var capture = new VideoCapture(chosen, VideoCaptureAPIs.DSHOW);
             if (!capture.IsOpened())
             {
-                Console.WriteLine($"Failed to open camera at index {chosen}.");
+                Logger.Error($"Failed to open camera at index {chosen}.");
                 capture.Dispose();
                 return false;
             }
@@ -54,7 +55,7 @@ namespace ComputerVision_LED_Console.Camera
             _capture = capture;
             IsOpen = true;
 
-            Console.WriteLine($"Using camera index {DeviceIndex} at {FrameWidth}x{FrameHeight} @ {FramesPerSecond:F1} fps.");
+            Logger.Info($"Using camera index {DeviceIndex} at {FrameWidth}x{FrameHeight} @ {FramesPerSecond:F1} fps.");
             return true;
         }
 

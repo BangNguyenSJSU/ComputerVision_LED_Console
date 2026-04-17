@@ -10,6 +10,9 @@ namespace ComputerVision_LED_Console.Services
 
         public event EventHandler<SystemStatus>? StatusUpdated;
 
+        // Update takes ownership of `status`: callers must construct a fresh SystemStatus
+        // each call and not mutate it afterwards. GetLatest clones on read, but StatusUpdated
+        // hands subscribers the same reference Update received — mutating it would race.
         public void Update(SystemStatus status)
         {
             lock (_gate)

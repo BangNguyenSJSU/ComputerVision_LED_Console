@@ -52,7 +52,10 @@ namespace ComputerVision_LED_Console.App
         {
             if (!_camera.Open()) return;
 
-            _state.DisplayScale = _camera.FrameWidth > 1280 ? 1280.0 / _camera.FrameWidth : 1.0;
+            int displayMax = _config.Camera.DisplayMaxWidth;
+            _state.DisplayScale = _camera.FrameWidth > displayMax
+                ? (double)displayMax / _camera.FrameWidth
+                : 1.0;
 
             PrintControlsHelp();
 
@@ -117,8 +120,8 @@ namespace ComputerVision_LED_Console.App
             Console.WriteLine("Controls: Q/ESC=quit | R=rescan | Left-click=add/drag | Right-click=delete");
             Console.WriteLine($"Per-LED thresholds (defaults On={_config.Detection.DefaultOnThreshold}, Off={_config.Detection.DefaultOffThreshold}). Left-click an LED to select it.");
             Console.WriteLine("  - C = auto-calibrate selected LED: press while lit, then press again while dark.");
-            Console.WriteLine("  - [ / ]  nudge On threshold by 5 (down / up).");
-            Console.WriteLine("  - ; / '  nudge Off threshold by 5 (down / up).");
+            Console.WriteLine($"  - [ / ]  nudge On threshold by {_config.Detection.ThresholdStep} (down / up).");
+            Console.WriteLine($"  - ; / '  nudge Off threshold by {_config.Detection.ThresholdStep} (down / up).");
             Console.WriteLine($"  - Minimum gap of {_config.Detection.MinThresholdGap} is enforced to prevent flicker.");
         }
     }

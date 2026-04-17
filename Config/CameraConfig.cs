@@ -9,5 +9,6 @@ namespace ComputerVision_LED_Console.Config
         public int BufferSize { get; set; } = 1;
         public string FourCC { get; set; } = "MJPG";
         public int MaxProbeIndex { get; set; } = 5;
+        public int DisplayMaxWidth { get; set; } = 1280;
     }
 }
