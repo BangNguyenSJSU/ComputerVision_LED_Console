@@ -38,10 +38,21 @@ namespace ComputerVision_LED_Console.Network
             if (IsRunning) return;
 
             string prefix = $"http://{_config.HttpBindAddress}:{_config.HttpPort}/";
-            _listener = new HttpListener();
-            _listener.Prefixes.Add(prefix);
-            _listener.Start();
+            var listener = new HttpListener();
+            listener.Prefixes.Add(prefix);
 
+            try
+            {
+                listener.Start();
+            }
+            catch (HttpListenerException ex)
+            {
+                Logger.Error($"HTTP status server could not bind to {prefix}: {ex.Message}. Capture will continue without HTTP.");
+                listener.Close();
+                return;
+            }
+
+            _listener = listener;
             _cts = new CancellationTokenSource();
             _acceptTask = Task.Run(() => AcceptLoop(_cts.Token));
 
