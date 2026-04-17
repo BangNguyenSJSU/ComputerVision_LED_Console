@@ -1,11 +1,14 @@
+using System;
 using ComputerVision_LED_Console.Models;
 
 namespace ComputerVision_LED_Console.Services
 {
     public class StatusService
     {
-        private readonly object _gate = new object();
-        private SystemStatus _latest = new SystemStatus();
+        private readonly object _gate = new();
+        private SystemStatus _latest = new();
+
+        public event EventHandler<SystemStatus>? StatusUpdated;
 
         public void Update(SystemStatus status)
         {
@@ -13,14 +16,42 @@ namespace ComputerVision_LED_Console.Services
             {
                 _latest = status;
             }
+
+            // Fire outside the lock so a handler that re-enters StatusService cannot deadlock.
+            StatusUpdated?.Invoke(this, status);
         }
 
         public SystemStatus GetLatest()
         {
             lock (_gate)
             {
-                return _latest;
+                return Clone(_latest);
             }
+        }
+
+        private static SystemStatus Clone(SystemStatus source)
+        {
+            var copy = new SystemStatus
+            {
+                TimestampUtc = source.TimestampUtc,
+                CameraIndex = source.CameraIndex,
+                FrameWidth = source.FrameWidth,
+                FrameHeight = source.FrameHeight,
+                FramesPerSecond = source.FramesPerSecond,
+            };
+
+            foreach (var led in source.Leds)
+            {
+                copy.Leds.Add(new DetectionResult
+                {
+                    MarkerId = led.MarkerId,
+                    Status = led.Status,
+                    Brightness = led.Brightness,
+                    TimestampUtc = led.TimestampUtc,
+                });
+            }
+
+            return copy;
         }
     }
 }

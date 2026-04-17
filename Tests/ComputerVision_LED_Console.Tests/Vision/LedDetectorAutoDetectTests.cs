@@ -1,6 +1,7 @@
 using System;
 using ComputerVision_LED_Console.Camera;
 using ComputerVision_LED_Console.Config;
+using ComputerVision_LED_Console.Utilities;
 using ComputerVision_LED_Console.Vision;
 using OpenCvSharp;
 
@@ -30,7 +31,7 @@ public class LedDetectorAutoDetectTests
     [Fact]
     public void AutoDetect_OnFrameWithOneLed_AddsOneMarker()
     {
-        var detector = new LedDetector(new DetectionConfig());
+        var detector = new LedDetector(new DetectionConfig(), new SystemTimeProvider());
         using var frame = MakeFrameWithYellowDot(640, 480, new OpenCvSharp.Point(320, 240), radius: 15);
 
         detector.AutoDetect(frame);
@@ -41,7 +42,7 @@ public class LedDetectorAutoDetectTests
     [Fact]
     public void AutoDetect_OnSolidDarkFrame_AddsNothing()
     {
-        var detector = new LedDetector(new DetectionConfig());
+        var detector = new LedDetector(new DetectionConfig(), new SystemTimeProvider());
         using var frame = MakeSolidFrame(640, 480, DarkBackground);
 
         detector.AutoDetect(frame);
@@ -52,7 +53,7 @@ public class LedDetectorAutoDetectTests
     [Fact]
     public void AutoDetect_CalledTwice_DoesNotDuplicateMarkers()
     {
-        var detector = new LedDetector(new DetectionConfig());
+        var detector = new LedDetector(new DetectionConfig(), new SystemTimeProvider());
         using var frame = MakeFrameWithYellowDot(640, 480, new OpenCvSharp.Point(320, 240), radius: 15);
 
         detector.AutoDetect(frame);
@@ -65,7 +66,7 @@ public class LedDetectorAutoDetectTests
     public void AutoDetect_FiltersContoursBelowMinRadius()
     {
         // MinDetectRadius default = 4. A radius-2 dot is 4 px across and should be filtered.
-        var detector = new LedDetector(new DetectionConfig());
+        var detector = new LedDetector(new DetectionConfig(), new SystemTimeProvider());
         using var frame = MakeFrameWithYellowDot(640, 480, new OpenCvSharp.Point(320, 240), radius: 2);
 
         detector.AutoDetect(frame);
@@ -77,7 +78,7 @@ public class LedDetectorAutoDetectTests
     public void AutoDetect_FiltersContoursAboveMaxRadius()
     {
         // MaxDetectRadius default = 60. A radius-80 dot is 160 px across and should be filtered.
-        var detector = new LedDetector(new DetectionConfig());
+        var detector = new LedDetector(new DetectionConfig(), new SystemTimeProvider());
         using var frame = MakeFrameWithYellowDot(640, 480, new OpenCvSharp.Point(320, 240), radius: 80);
 
         detector.AutoDetect(frame);

@@ -19,6 +19,7 @@ public class FakeCameraSource : ICameraSource
     }
 
     public bool IsOpen { get; private set; }
+    public int DeviceIndex { get; } = -1;
     public int FrameWidth { get; private set; }
     public int FrameHeight { get; private set; }
     public double FramesPerSecond { get; } = 30.0;

@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ComputerVision_LED_Console.Camera;
 using ComputerVision_LED_Console.Config;
 using ComputerVision_LED_Console.Models;
+using ComputerVision_LED_Console.Services;
+using ComputerVision_LED_Console.Utilities;
 using ComputerVision_LED_Console.Vision;
 using OpenCvSharp;
 
@@ -13,7 +16,9 @@ namespace ComputerVision_LED_Console
         const string WindowName = "LED Detection";
 
         static AppConfig _config = null!;
+        static ITimeProvider _time = null!;
         static LedDetector _detector = null!;
+        static StatusService _status = null!;
         static int DragIndex = -1;
         static int SelectedIndex = -1;
         static double DisplayScale = 1.0;
@@ -21,7 +26,9 @@ namespace ComputerVision_LED_Console
         static void Main(string[] args)
         {
             _config = new AppConfig();
-            _detector = new LedDetector(_config.Detection);
+            _time = new SystemTimeProvider();
+            _status = new StatusService();
+            _detector = new LedDetector(_config.Detection, _time);
 
             using var camera = new OpenCvCameraSource(_config.Camera);
             if (!camera.Open())
@@ -60,6 +67,16 @@ namespace ComputerVision_LED_Console
                 }
 
                 var results = _detector.EvaluateAll(fd);
+
+                _status.Update(new SystemStatus
+                {
+                    TimestampUtc = _time.UtcNow,
+                    CameraIndex = camera.DeviceIndex,
+                    FrameWidth = camera.FrameWidth,
+                    FrameHeight = camera.FrameHeight,
+                    FramesPerSecond = camera.FramesPerSecond,
+                    Leds = results.ToList(),
+                });
 
                 using Mat displayFrame = frame.Clone();
 

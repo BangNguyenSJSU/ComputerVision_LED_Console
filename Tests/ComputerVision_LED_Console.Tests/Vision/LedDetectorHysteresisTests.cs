@@ -1,5 +1,6 @@
 using ComputerVision_LED_Console.Config;
 using ComputerVision_LED_Console.Models;
+using ComputerVision_LED_Console.Utilities;
 using ComputerVision_LED_Console.Vision;
 using OpenCvSharp;
 
@@ -101,7 +102,7 @@ public class LedDetectorHysteresisTests
     [Fact]
     public void FindRoiAt_ReturnsIndex_WhenInsideRadius()
     {
-        var detector = new LedDetector(new DetectionConfig());
+        var detector = new LedDetector(new DetectionConfig(), new SystemTimeProvider());
         detector.AddRoi(x: 100, y: 100, radius: 20);
 
         int idx = detector.FindRoiAt(x: 105, y: 95);
@@ -112,7 +113,7 @@ public class LedDetectorHysteresisTests
     [Fact]
     public void FindRoiAt_ReturnsMinusOne_WhenOutside()
     {
-        var detector = new LedDetector(new DetectionConfig());
+        var detector = new LedDetector(new DetectionConfig(), new SystemTimeProvider());
         detector.AddRoi(x: 100, y: 100, radius: 20);
 
         int idx = detector.FindRoiAt(x: 500, y: 500);
@@ -123,7 +124,7 @@ public class LedDetectorHysteresisTests
     [Fact]
     public void AddRoi_AssignsIncrementingIds()
     {
-        var detector = new LedDetector(new DetectionConfig());
+        var detector = new LedDetector(new DetectionConfig(), new SystemTimeProvider());
 
         detector.AddRoi(0, 0, 10);
         detector.AddRoi(10, 10, 10);
@@ -135,7 +136,7 @@ public class LedDetectorHysteresisTests
     [Fact]
     public void RemoveRoiAt_ReturnsFalse_WhenIndexOutOfRange()
     {
-        var detector = new LedDetector(new DetectionConfig());
+        var detector = new LedDetector(new DetectionConfig(), new SystemTimeProvider());
 
         Assert.False(detector.RemoveRoiAt(0));
         Assert.False(detector.RemoveRoiAt(-1));

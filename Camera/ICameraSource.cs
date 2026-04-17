@@ -6,6 +6,7 @@ namespace ComputerVision_LED_Console.Camera
     public interface ICameraSource : IDisposable
     {
         bool IsOpen { get; }
+        int DeviceIndex { get; }
         int FrameWidth { get; }
         int FrameHeight { get; }
         double FramesPerSecond { get; }

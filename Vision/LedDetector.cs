@@ -11,12 +11,14 @@ namespace ComputerVision_LED_Console.Vision
     public class LedDetector : ILedDetector
     {
         private readonly DetectionConfig _config;
+        private readonly ITimeProvider _time;
         private readonly List<RoiConfig> _rois = new();
         private int _nextId = 1;
 
-        public LedDetector(DetectionConfig config)
+        public LedDetector(DetectionConfig config, ITimeProvider time)
         {
             _config = config;
+            _time = time;
         }
 
         public IReadOnlyList<RoiConfig> Rois => _rois;
@@ -152,7 +154,7 @@ namespace ComputerVision_LED_Console.Vision
                     MarkerId = roi.Id,
                     Status = LedStatus.Unknown,
                     Brightness = 0,
-                    TimestampUtc = frame.TimestampUtc,
+                    TimestampUtc = _time.UtcNow,
                 };
             }
 
@@ -172,7 +174,7 @@ namespace ComputerVision_LED_Console.Vision
                 MarkerId = roi.Id,
                 Status = roi.State,
                 Brightness = brightness,
-                TimestampUtc = frame.TimestampUtc,
+                TimestampUtc = _time.UtcNow,
             };
         }
 
