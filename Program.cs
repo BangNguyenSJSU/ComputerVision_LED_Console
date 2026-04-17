@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ComputerVision_LED_Console.Models;
 using OpenCvSharp;
 
 namespace ComputerVision_LED_Console
@@ -13,7 +14,7 @@ namespace ComputerVision_LED_Console
 
             public Point2f Center;
             public int Radius;
-            public string State = "OFF";
+            public LedStatus State = LedStatus.Off;
             public double OnThreshold = DefaultOn;
             public double OffThreshold = DefaultOff;
             public double LastBrightness;
@@ -118,25 +119,26 @@ namespace ComputerVision_LED_Console
                     double brightness = Cv2.Mean(gray).Val0;
                     m.LastBrightness = brightness;
 
-                    if (m.State == "OFF" && brightness >= m.OnThreshold)
+                    if (m.State == LedStatus.Off && brightness >= m.OnThreshold)
                     {
-                        m.State = "ON";
+                        m.State = LedStatus.On;
                     }
-                    else if (m.State == "ON" && brightness <= m.OffThreshold)
+                    else if (m.State == LedStatus.On && brightness <= m.OffThreshold)
                     {
-                        m.State = "OFF";
+                        m.State = LedStatus.Off;
                     }
 
-                    Scalar color = m.State == "ON"
+                    Scalar color = m.State == LedStatus.On
                         ? new Scalar(0, 255, 0)
                         : new Scalar(0, 0, 255);
 
                     int thickness = (i == SelectedIndex) ? 3 : 2;
                     Cv2.Circle(displayFrame, (int)m.Center.X, (int)m.Center.Y, m.Radius, color, thickness);
 
+                    string stateText = m.State.ToString().ToUpperInvariant();
                     string label = (i == SelectedIndex)
-                        ? $"{m.State} ({brightness:F0}) [on>={m.OnThreshold:F0} off<={m.OffThreshold:F0}]"
-                        : $"{m.State} ({brightness:F0})";
+                        ? $"{stateText} ({brightness:F0}) [on>={m.OnThreshold:F0} off<={m.OffThreshold:F0}]"
+                        : $"{stateText} ({brightness:F0})";
 
                     Point labelPos = new Point(
                         (int)m.Center.X - m.Radius,
