@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ComputerVision_LED_Console.Camera;
 using ComputerVision_LED_Console.Config;
 using ComputerVision_LED_Console.Models;
+using ComputerVision_LED_Console.Utilities;
 using OpenCvSharp;
 
 namespace ComputerVision_LED_Console.Vision
@@ -185,7 +186,50 @@ namespace ComputerVision_LED_Console.Vision
             return results;
         }
 
-        // AutoDetect implemented in Phase 7.
-        public void AutoDetect(FrameData frame) => throw new NotImplementedException();
+        public void AutoDetect(FrameData frame)
+        {
+            using var hsv = new Mat();
+            Cv2.CvtColor(frame.Frame, hsv, ColorConversionCodes.BGR2HSV);
+
+            var hsvLow = new Scalar(_config.HueLow, _config.SaturationLow, _config.ValueLow);
+            var hsvHigh = new Scalar(_config.HueHigh, _config.SaturationHigh, _config.ValueHigh);
+
+            using var mask = new Mat();
+            Cv2.InRange(hsv, hsvLow, hsvHigh, mask);
+
+            using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
+            Cv2.MorphologyEx(mask, mask, MorphTypes.Open, kernel);
+
+            Cv2.FindContours(
+                mask,
+                out Point[][] contours,
+                out _,
+                RetrievalModes.External,
+                ContourApproximationModes.ApproxSimple);
+
+            foreach (var c in contours)
+            {
+                Cv2.MinEnclosingCircle(c, out Point2f center, out float radius);
+                int r = (int)Math.Round(radius);
+                if (r < _config.MinDetectRadius || r > _config.MaxDetectRadius) continue;
+
+                if (IsDuplicate(center.X, center.Y)) continue;
+
+                AddRoi(center.X, center.Y, r);
+            }
+
+            Logger.Info($"Detected {_rois.Count} yellow LED(s).");
+        }
+
+        private bool IsDuplicate(float x, float y)
+        {
+            foreach (var existing in _rois)
+            {
+                float dx = existing.CenterX - x;
+                float dy = existing.CenterY - y;
+                if (dx * dx + dy * dy < existing.Radius * existing.Radius) return true;
+            }
+            return false;
+        }
     }
 }

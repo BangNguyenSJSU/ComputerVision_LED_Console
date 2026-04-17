@@ -55,7 +55,7 @@ namespace ComputerVision_LED_Console
 
                 if (!initialized)
                 {
-                    DetectYellowLeds(frame);
+                    _detector.AutoDetect(fd);
                     initialized = true;
                 }
 
@@ -147,7 +147,7 @@ namespace ComputerVision_LED_Console
                     _detector.Clear();
                     DragIndex = -1;
                     SelectedIndex = -1;
-                    DetectYellowLeds(frame);
+                    _detector.AutoDetect(fd);
                 }
 
                 if (SelectedIndex >= 0 && SelectedIndex < _detector.Rois.Count)
@@ -162,58 +162,6 @@ namespace ComputerVision_LED_Console
             }
 
             Cv2.DestroyAllWindows();
-        }
-
-        static void DetectYellowLeds(Mat frame)
-        {
-            using var hsv = new Mat();
-            Cv2.CvtColor(frame, hsv, ColorConversionCodes.BGR2HSV);
-
-            var hsvLow = new Scalar(_config.Detection.HueLow, _config.Detection.SaturationLow, _config.Detection.ValueLow);
-            var hsvHigh = new Scalar(_config.Detection.HueHigh, _config.Detection.SaturationHigh, _config.Detection.ValueHigh);
-
-            using var mask = new Mat();
-            Cv2.InRange(hsv, hsvLow, hsvHigh, mask);
-
-            using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
-            Cv2.MorphologyEx(mask, mask, MorphTypes.Open, kernel);
-
-            Cv2.FindContours(
-                mask,
-                out Point[][] contours,
-                out _,
-                RetrievalModes.External,
-                ContourApproximationModes.ApproxSimple);
-
-            foreach (var c in contours)
-            {
-                Cv2.MinEnclosingCircle(c, out Point2f center, out float radius);
-                int r = (int)Math.Round(radius);
-                if (r < _config.Detection.MinDetectRadius || r > _config.Detection.MaxDetectRadius)
-                {
-                    continue;
-                }
-
-                bool duplicate = false;
-                foreach (var existing in _detector.Rois)
-                {
-                    float dx = existing.CenterX - center.X;
-                    float dy = existing.CenterY - center.Y;
-                    if (dx * dx + dy * dy < existing.Radius * existing.Radius)
-                    {
-                        duplicate = true;
-                        break;
-                    }
-                }
-                if (duplicate)
-                {
-                    continue;
-                }
-
-                _detector.AddRoi(center.X, center.Y, r);
-            }
-
-            Console.WriteLine($"Detected {_detector.Rois.Count} yellow LED(s).");
         }
 
         static void OnMouse(MouseEventTypes @event, int x, int y, MouseEventFlags flags, IntPtr userData)
