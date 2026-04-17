@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ComputerVision_LED_Console.Config;
 using ComputerVision_LED_Console.Models;
 using OpenCvSharp;
 
@@ -9,31 +10,18 @@ namespace ComputerVision_LED_Console
     {
         class LedMarker
         {
-            public const double DefaultOn = 150.0;
-            public const double DefaultOff = 120.0;
-
             public Point2f Center;
             public int Radius;
             public LedStatus State = LedStatus.Off;
-            public double OnThreshold = DefaultOn;
-            public double OffThreshold = DefaultOff;
+            public double OnThreshold;
+            public double OffThreshold;
             public double LastBrightness;
             public int CalibrationPhase;
         }
 
-        static readonly Scalar YellowLow = new Scalar(20, 100, 150);
-        static readonly Scalar YellowHigh = new Scalar(35, 255, 255);
-
-        const double ThresholdStep = 5.0;
-        const double MinThresholdGap = 5.0;
-        const double CalibrationMargin = 10.0;
-
-        const int DefaultManualRadius = 20;
-        const int MinDetectRadius = 4;
-        const int MaxDetectRadius = 60;
-
         const string WindowName = "LED Detection";
 
+        static AppConfig _config = null!;
         static readonly List<LedMarker> Markers = new List<LedMarker>();
         static int DragIndex = -1;
         static int SelectedIndex = -1;
@@ -41,7 +29,9 @@ namespace ComputerVision_LED_Console
 
         static void Main(string[] args)
         {
-            int selectedIndex = SelectCamera();
+            _config = new AppConfig();
+
+            int selectedIndex = SelectCamera(_config.Camera.MaxProbeIndex);
             if (selectedIndex < 0)
             {
                 return;
@@ -57,11 +47,12 @@ namespace ComputerVision_LED_Console
 
             // Request MJPEG so high-res USB webcams fit in USB bandwidth;
             // cap resolution and buffer so a 4K camera does not stall the pipeline.
-            capture.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC('M', 'J', 'P', 'G'));
-            capture.Set(VideoCaptureProperties.FrameWidth, 1920);
-            capture.Set(VideoCaptureProperties.FrameHeight, 1080);
-            capture.Set(VideoCaptureProperties.Fps, 60);
-            capture.Set(VideoCaptureProperties.BufferSize, 1);
+            string fourCc = _config.Camera.FourCC;
+            capture.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC(fourCc[0], fourCc[1], fourCc[2], fourCc[3]));
+            capture.Set(VideoCaptureProperties.FrameWidth, _config.Camera.FrameWidth);
+            capture.Set(VideoCaptureProperties.FrameHeight, _config.Camera.FrameHeight);
+            capture.Set(VideoCaptureProperties.Fps, _config.Camera.TargetFps);
+            capture.Set(VideoCaptureProperties.BufferSize, _config.Camera.BufferSize);
 
             int frameWidth = (int)capture.Get(VideoCaptureProperties.FrameWidth);
             int frameHeight = (int)capture.Get(VideoCaptureProperties.FrameHeight);
@@ -70,11 +61,11 @@ namespace ComputerVision_LED_Console
 
             Console.WriteLine($"Using camera index {selectedIndex} at {frameWidth}x{frameHeight} @ {actualFps:F1} fps.");
             Console.WriteLine("Controls: Q/ESC=quit | R=rescan | Left-click=add/drag | Right-click=delete");
-            Console.WriteLine($"Per-LED thresholds (defaults On={LedMarker.DefaultOn}, Off={LedMarker.DefaultOff}). Left-click an LED to select it.");
+            Console.WriteLine($"Per-LED thresholds (defaults On={_config.Detection.DefaultOnThreshold}, Off={_config.Detection.DefaultOffThreshold}). Left-click an LED to select it.");
             Console.WriteLine("  - C = auto-calibrate selected LED: press while lit, then press again while dark.");
             Console.WriteLine("  - [ / ]  nudge On threshold by 5 (down / up).");
             Console.WriteLine("  - ; / '  nudge Off threshold by 5 (down / up).");
-            Console.WriteLine($"  - Minimum gap of {MinThresholdGap} is enforced to prevent flicker.");
+            Console.WriteLine($"  - Minimum gap of {_config.Detection.MinThresholdGap} is enforced to prevent flicker.");
 
             using var frame = new Mat();
             bool initialized = false;
@@ -219,35 +210,35 @@ namespace ComputerVision_LED_Console
                     {
                         if (sel.CalibrationPhase == 0)
                         {
-                            sel.OnThreshold = Math.Max(0, sel.LastBrightness - CalibrationMargin);
+                            sel.OnThreshold = Math.Max(0, sel.LastBrightness - _config.Detection.CalibrationMargin);
                             EnforceThresholdGap(sel, adjustOn: false);
                             sel.CalibrationPhase = 1;
                         }
                         else
                         {
-                            sel.OffThreshold = Math.Min(255, sel.LastBrightness + CalibrationMargin);
+                            sel.OffThreshold = Math.Min(255, sel.LastBrightness + _config.Detection.CalibrationMargin);
                             EnforceThresholdGap(sel, adjustOn: true);
                             sel.CalibrationPhase = 0;
                         }
                     }
                     else if (key == ']')
                     {
-                        sel.OnThreshold = Math.Min(255, sel.OnThreshold + ThresholdStep);
+                        sel.OnThreshold = Math.Min(255, sel.OnThreshold + _config.Detection.ThresholdStep);
                         EnforceThresholdGap(sel, adjustOn: false);
                     }
                     else if (key == '[')
                     {
-                        sel.OnThreshold = Math.Max(0, sel.OnThreshold - ThresholdStep);
+                        sel.OnThreshold = Math.Max(0, sel.OnThreshold - _config.Detection.ThresholdStep);
                         EnforceThresholdGap(sel, adjustOn: false);
                     }
                     else if (key == '\'')
                     {
-                        sel.OffThreshold = Math.Min(255, sel.OffThreshold + ThresholdStep);
+                        sel.OffThreshold = Math.Min(255, sel.OffThreshold + _config.Detection.ThresholdStep);
                         EnforceThresholdGap(sel, adjustOn: true);
                     }
                     else if (key == ';')
                     {
-                        sel.OffThreshold = Math.Max(0, sel.OffThreshold - ThresholdStep);
+                        sel.OffThreshold = Math.Max(0, sel.OffThreshold - _config.Detection.ThresholdStep);
                         EnforceThresholdGap(sel, adjustOn: true);
                     }
                 }
@@ -262,8 +253,11 @@ namespace ComputerVision_LED_Console
             using var hsv = new Mat();
             Cv2.CvtColor(frame, hsv, ColorConversionCodes.BGR2HSV);
 
+            var hsvLow = new Scalar(_config.Detection.HueLow, _config.Detection.SaturationLow, _config.Detection.ValueLow);
+            var hsvHigh = new Scalar(_config.Detection.HueHigh, _config.Detection.SaturationHigh, _config.Detection.ValueHigh);
+
             using var mask = new Mat();
-            Cv2.InRange(hsv, YellowLow, YellowHigh, mask);
+            Cv2.InRange(hsv, hsvLow, hsvHigh, mask);
 
             using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
             Cv2.MorphologyEx(mask, mask, MorphTypes.Open, kernel);
@@ -279,7 +273,7 @@ namespace ComputerVision_LED_Console
             {
                 Cv2.MinEnclosingCircle(c, out Point2f center, out float radius);
                 int r = (int)Math.Round(radius);
-                if (r < MinDetectRadius || r > MaxDetectRadius)
+                if (r < _config.Detection.MinDetectRadius || r > _config.Detection.MaxDetectRadius)
                 {
                     continue;
                 }
@@ -300,7 +294,13 @@ namespace ComputerVision_LED_Console
                     continue;
                 }
 
-                Markers.Add(new LedMarker { Center = center, Radius = r });
+                Markers.Add(new LedMarker
+                {
+                    Center = center,
+                    Radius = r,
+                    OnThreshold = _config.Detection.DefaultOnThreshold,
+                    OffThreshold = _config.Detection.DefaultOffThreshold,
+                });
             }
 
             Console.WriteLine($"Detected {Markers.Count} yellow LED(s).");
@@ -326,7 +326,9 @@ namespace ComputerVision_LED_Console
                         Markers.Add(new LedMarker
                         {
                             Center = new Point2f(nx, ny),
-                            Radius = DefaultManualRadius,
+                            Radius = _config.Detection.DefaultManualRadius,
+                            OnThreshold = _config.Detection.DefaultOnThreshold,
+                            OffThreshold = _config.Detection.DefaultOffThreshold,
                         });
                         DragIndex = Markers.Count - 1;
                         SelectedIndex = Markers.Count - 1;
@@ -360,9 +362,10 @@ namespace ComputerVision_LED_Console
 
         static void EnforceThresholdGap(LedMarker m, bool adjustOn)
         {
-            if (m.OnThreshold - m.OffThreshold >= MinThresholdGap) return;
-            if (adjustOn) m.OnThreshold = Math.Min(255, m.OffThreshold + MinThresholdGap);
-            else m.OffThreshold = Math.Max(0, m.OnThreshold - MinThresholdGap);
+            double gap = _config.Detection.MinThresholdGap;
+            if (m.OnThreshold - m.OffThreshold >= gap) return;
+            if (adjustOn) m.OnThreshold = Math.Min(255, m.OffThreshold + gap);
+            else m.OffThreshold = Math.Max(0, m.OnThreshold - gap);
         }
 
         static int FindMarkerAt(float x, float y)
