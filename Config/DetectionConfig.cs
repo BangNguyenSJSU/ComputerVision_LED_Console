@@ -9,8 +9,8 @@ namespace ComputerVision_LED_Console.Config
         public double CalibrationMargin { get; set; } = 10.0;
 
         public int MinDetectRadius { get; set; } = 4;
-        public int MaxDetectRadius { get; set; } = 60;
-        public int DefaultManualRadius { get; set; } = 20;
+        public int MaxDetectRadius { get; set; } = 30;
+        public int DefaultManualRadius { get; set; } = 8;
 
         public int HueLow { get; set; } = 20;
         public int HueHigh { get; set; } = 35;
