@@ -13,7 +13,7 @@ namespace ComputerVision_LED_Console.Config
 
         // Exposure is in DSHOW log2-seconds units (typical Logitech range -11..-1).
         // AutoExposure uses DSHOW sentinel values: 0.75 = auto, 0.25 = manual.
-        public bool AutoExposure { get; set; } = true;
+        public bool AutoExposure { get; set; } = false;
         public double InitialExposure { get; set; } = -6.0;
         public double ExposureMin { get; set; } = -11.0;
         public double ExposureMax { get; set; } = -1.0;

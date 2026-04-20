@@ -27,6 +27,14 @@ namespace ComputerVision_LED_Console.Vision
 
         public static LedStatus Transition(LedStatus current, double brightness, double onThreshold, double offThreshold)
         {
+            // First observation after creation / restore: pick Off or On by the midpoint
+            // so a restored marker doesn't stay "Unknown" forever when the current brightness
+            // sits inside the hysteresis dead-band.
+            if (current == LedStatus.Unknown)
+            {
+                double mid = (onThreshold + offThreshold) * 0.5;
+                return brightness >= mid ? LedStatus.On : LedStatus.Off;
+            }
             if (current == LedStatus.Off && brightness >= onThreshold) return LedStatus.On;
             if (current == LedStatus.On && brightness <= offThreshold) return LedStatus.Off;
             return current;
@@ -193,11 +201,7 @@ namespace ComputerVision_LED_Console.Vision
             using var hsv = new Mat();
             Cv2.CvtColor(frame.Frame, hsv, ColorConversionCodes.BGR2HSV);
 
-            var hsvLow = new Scalar(_config.HueLow, _config.SaturationLow, _config.ValueLow);
-            var hsvHigh = new Scalar(_config.HueHigh, _config.SaturationHigh, _config.ValueHigh);
-
-            using var mask = new Mat();
-            Cv2.InRange(hsv, hsvLow, hsvHigh, mask);
+            using var mask = BuildColorMask(hsv);
 
             using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
             Cv2.MorphologyEx(mask, mask, MorphTypes.Open, kernel);
@@ -209,6 +213,7 @@ namespace ComputerVision_LED_Console.Vision
                 RetrievalModes.External,
                 ContourApproximationModes.ApproxSimple);
 
+            int added = 0;
             foreach (var c in contours)
             {
                 Cv2.MinEnclosingCircle(c, out Point2f center, out float radius);
@@ -218,9 +223,35 @@ namespace ComputerVision_LED_Console.Vision
                 if (IsDuplicate(center.X, center.Y)) continue;
 
                 AddRoi(center.X, center.Y, r);
+                added++;
             }
 
-            Logger.Info($"Detected {_rois.Count} yellow LED(s).");
+            Logger.Info($"Detected {added} LED(s) (total markers: {_rois.Count}).");
+        }
+
+        private Mat BuildColorMask(Mat hsv)
+        {
+            var mask = new Mat(hsv.Size(), MatType.CV_8UC1, Scalar.All(0));
+            int sLow = _config.SaturationLow, sHigh = _config.SaturationHigh;
+            int vLow = _config.ValueLow, vHigh = _config.ValueHigh;
+
+            if (_config.DetectYellow)
+            {
+                OrInRange(hsv, mask, _config.HueLow, _config.HueHigh, sLow, sHigh, vLow, vHigh);
+            }
+            if (_config.DetectRed)
+            {
+                OrInRange(hsv, mask, _config.RedHueLow1, _config.RedHueHigh1, sLow, sHigh, vLow, vHigh);
+                OrInRange(hsv, mask, _config.RedHueLow2, _config.RedHueHigh2, sLow, sHigh, vLow, vHigh);
+            }
+            return mask;
+        }
+
+        private static void OrInRange(Mat hsv, Mat mask, int hLo, int hHi, int sLo, int sHi, int vLo, int vHi)
+        {
+            using var band = new Mat();
+            Cv2.InRange(hsv, new Scalar(hLo, sLo, vLo), new Scalar(hHi, sHi, vHi), band);
+            Cv2.BitwiseOr(mask, band, mask);
         }
 
         private bool IsDuplicate(float x, float y)

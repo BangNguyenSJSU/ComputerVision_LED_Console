@@ -27,6 +27,36 @@ public class LedDetectorHysteresisTests
         Assert.Equal(expected, state);
     }
 
+    [Theory]
+    [InlineData(200, LedStatus.On)]   // clearly above On threshold
+    [InlineData(140, LedStatus.On)]   // above midpoint (135)
+    [InlineData(130, LedStatus.Off)]  // below midpoint
+    [InlineData(10, LedStatus.Off)]   // clearly below Off threshold
+    public void Transition_UnknownStartState_ResolvesByMidpoint(double brightness, LedStatus expected)
+    {
+        LedStatus resolved = LedDetector.Transition(LedStatus.Unknown, brightness, onThreshold: 150, offThreshold: 120);
+
+        Assert.Equal(expected, resolved);
+    }
+
+    [Fact]
+    public void Transition_UnknownToResolvedToHysteresis_KeepsBehaviorAcrossSequence()
+    {
+        // Restored marker that starts Unknown, gets classified once, then stays hysteretic.
+        LedStatus s = LedStatus.Unknown;
+        s = LedDetector.Transition(s, 130, 150, 120); // below midpoint 135 -> Off
+        Assert.Equal(LedStatus.Off, s);
+
+        s = LedDetector.Transition(s, 148, 150, 120); // between thresholds, stays Off
+        Assert.Equal(LedStatus.Off, s);
+
+        s = LedDetector.Transition(s, 151, 150, 120); // crosses On threshold
+        Assert.Equal(LedStatus.On, s);
+
+        s = LedDetector.Transition(s, 125, 150, 120); // between, stays On
+        Assert.Equal(LedStatus.On, s);
+    }
+
     [Fact]
     public void EnforceThresholdGap_NarrowsOff_WhenAdjustOnFalse()
     {
