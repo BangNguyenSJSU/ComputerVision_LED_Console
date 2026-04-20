@@ -90,6 +90,27 @@ namespace ComputerVision_LED_Console.Vision
             _rois.Clear();
         }
 
+        public void RestoreMarkers(IEnumerable<MarkerSnapshot> snapshots)
+        {
+            _rois.Clear();
+            int maxId = 0;
+            foreach (var m in snapshots)
+            {
+                _rois.Add(new RoiConfig
+                {
+                    Id = m.Id,
+                    CenterX = m.CenterX,
+                    CenterY = m.CenterY,
+                    Radius = m.Radius,
+                    OnThreshold = m.OnThreshold,
+                    OffThreshold = m.OffThreshold,
+                    State = LedStatus.Unknown,
+                });
+                if (m.Id > maxId) maxId = m.Id;
+            }
+            _nextId = maxId + 1;
+        }
+
         public void MoveRoi(int index, float x, float y)
         {
             if (index < 0 || index >= _rois.Count) return;

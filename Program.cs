@@ -13,10 +13,12 @@ namespace ComputerVision_LED_Console
     {
         static void Main(string[] args)
         {
-            var config = new AppConfig();
+            ConfigStore.TryLoad(out var snapshot);
+            var config = snapshot.App;
             ITimeProvider time = new SystemTimeProvider();
             var status = new StatusService();
             var detector = new LedDetector(config.Detection, time);
+            if (snapshot.Markers.Count > 0) detector.RestoreMarkers(snapshot.Markers);
             var state = new AppState();
             var renderer = new OverlayRenderer(state);
             using var camera = new OpenCvCameraSource(config.Camera);

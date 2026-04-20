@@ -93,7 +93,14 @@ namespace ComputerVision_LED_Console.App
 
                 if (!initialized)
                 {
-                    _detector.AutoDetect(fd);
+                    if (_detector.Rois.Count == 0)
+                    {
+                        _detector.AutoDetect(fd);
+                    }
+                    else
+                    {
+                        Logger.Info($"Skipping auto-detect; {_detector.Rois.Count} marker(s) restored from config.");
+                    }
                     initialized = true;
                 }
 
@@ -112,8 +119,13 @@ namespace ComputerVision_LED_Console.App
                 _renderer.RenderAndShow(WindowName, frame, _detector.Rois, results, _state.SelectedMarkerIndex);
 
                 var action = _input.HandleKey(Cv2.WaitKey(1));
-                if (action == KeyAction.Quit) break;
+                if (action == KeyAction.Quit)
+                {
+                    ConfigStore.Save(_config, _detector.Rois);
+                    break;
+                }
                 if (action == KeyAction.Rescan) _detector.AutoDetect(fd);
+                if (action == KeyAction.Save) ConfigStore.Save(_config, _detector.Rois);
             }
         }
 
@@ -128,6 +140,7 @@ namespace ComputerVision_LED_Console.App
             Console.WriteLine($"  - + / -  zoom in / out (step {_config.Camera.ZoomStep:F2}x, range {_config.Camera.MinZoomFactor:F1}..{_config.Camera.MaxZoomFactor:F1}x).");
             Console.WriteLine($"  - . / ,  exposure up / down (step {_config.Camera.ExposureStep:F1}, auto-switches to manual).");
             Console.WriteLine("  - A      toggle auto-exposure on / off.");
+            Console.WriteLine($"  - S      save markers + settings to {ConfigStore.FileName} (also auto-saves on quit).");
         }
     }
 }

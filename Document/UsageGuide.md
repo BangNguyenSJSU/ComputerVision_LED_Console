@@ -49,7 +49,8 @@ The video window must be the focused window for these to register.
 | **+** / **-** | Zoom in / out (hardware UVC zoom on supported cams, digital crop+resize otherwise) |
 | **,** / **.** | Exposure down / up (darker is generally better for LED detection). Auto-switches camera to manual mode. |
 | **A** | Toggle auto-exposure on / off |
-| **Q** or **Esc** | Quit |
+| **S** | Save current markers + settings to `config_ComputerVisionLed.txt` |
+| **Q** or **Esc** | Quit (also auto-saves) |
 
 The label on each marker shows state, current brightness, and (for the selected marker) the active thresholds.
 
@@ -96,7 +97,36 @@ All tunables live under `Config/`. Defaults are set in each class.
 - `TcpBindAddress` — default `127.0.0.1`
 - `TcpPort` — default `9090`
 
-Config loading from disk is **not** wired in v1 — edit the defaults and rebuild.
+Config loading from disk **is** wired. On startup the app looks for `config_ComputerVisionLed.txt` in the same directory as the executable. If present, every field in that file overrides the compiled defaults and any saved LED markers (position, radius, per-LED thresholds) are restored. If the file is missing or unparseable, the app logs a warning and falls back to the compiled defaults.
+
+### Saving
+
+- Press **S** at any time to write the current AppConfig + markers back to `config_ComputerVisionLed.txt`.
+- The app also auto-saves when you quit via **Q** / **Esc**.
+
+### File format
+
+The file is JSON (named `.txt` for easy notepad editing). Shape:
+
+```json
+{
+  "version": 1,
+  "app": {
+    "camera": { "frameWidth": 640, "frameHeight": 480, "targetFps": 240, "autoExposure": false, "initialExposure": -6.0, ... },
+    "detection": { "defaultOnThreshold": 12.0, "defaultOffThreshold": 6.0, "detectRed": true, ... },
+    "network": { "httpEnabled": false, "tcpBinaryEnabled": true, ... }
+  },
+  "markers": [
+    { "id": 1, "centerX": 312.0, "centerY": 204.0, "radius": 6, "onThreshold": 12.0, "offThreshold": 6.0 }
+  ]
+}
+```
+
+### Editing by hand
+
+- Safe to edit in any text editor — invalid JSON is logged as a warning on next launch and ignored.
+- Runtime-only marker state (current ON/OFF, last brightness, calibration phase) is **not** saved. Each marker resumes in `Unknown` state until the first frame re-evaluates it.
+- Delete the file to reset everything to compiled defaults.
 
 ---
 

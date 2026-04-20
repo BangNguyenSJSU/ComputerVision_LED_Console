@@ -11,6 +11,7 @@ namespace ComputerVision_LED_Console.App
         Continue,
         Quit,
         Rescan,
+        Save,
     }
 
     public class InputHandler
@@ -90,6 +91,11 @@ namespace ComputerVision_LED_Console.App
                 _state.DragMarkerIndex = -1;
                 _state.SelectedMarkerIndex = -1;
                 return KeyAction.Rescan;
+            }
+
+            if (key == 's' || key == 'S')
+            {
+                return KeyAction.Save;
             }
 
             if (key == '=' || key == '+') { _camera.AdjustZoom(+_cameraConfig.ZoomStep); return KeyAction.Continue; }
