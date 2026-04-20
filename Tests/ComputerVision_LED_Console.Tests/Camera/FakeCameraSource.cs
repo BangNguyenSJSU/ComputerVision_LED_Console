@@ -24,6 +24,15 @@ public class FakeCameraSource : ICameraSource
     public int FrameHeight { get; private set; }
     public double FramesPerSecond { get; } = 30.0;
 
+    public bool HardwareZoomSupported => false;
+    public double CurrentZoomFactor { get; private set; } = 1.0;
+    public double CurrentExposure { get; private set; } = -6.0;
+    public bool AutoExposureOn { get; private set; } = true;
+
+    public int ZoomAdjustCalls { get; private set; }
+    public int ExposureAdjustCalls { get; private set; }
+    public int AutoExposureToggleCalls { get; private set; }
+
     public bool Open()
     {
         if (_paths.Count == 0)
@@ -78,4 +87,23 @@ public class FakeCameraSource : ICameraSource
     public void Close() => IsOpen = false;
 
     public void Dispose() => Close();
+
+    public void AdjustZoom(double delta)
+    {
+        ZoomAdjustCalls++;
+        CurrentZoomFactor = Math.Clamp(CurrentZoomFactor + delta, 1.0, 5.0);
+    }
+
+    public void AdjustExposure(double delta)
+    {
+        ExposureAdjustCalls++;
+        AutoExposureOn = false;
+        CurrentExposure = Math.Clamp(CurrentExposure + delta, -11.0, -1.0);
+    }
+
+    public void ToggleAutoExposure()
+    {
+        AutoExposureToggleCalls++;
+        AutoExposureOn = !AutoExposureOn;
+    }
 }

@@ -1,4 +1,5 @@
 using System;
+using ComputerVision_LED_Console.Camera;
 using ComputerVision_LED_Console.Config;
 using ComputerVision_LED_Console.Vision;
 using OpenCvSharp;
@@ -17,12 +18,16 @@ namespace ComputerVision_LED_Console.App
         private readonly LedDetector _detector;
         private readonly AppState _state;
         private readonly DetectionConfig _config;
+        private readonly ICameraSource _camera;
+        private readonly CameraConfig _cameraConfig;
 
-        public InputHandler(LedDetector detector, AppState state, DetectionConfig config)
+        public InputHandler(LedDetector detector, AppState state, DetectionConfig config, ICameraSource camera, CameraConfig cameraConfig)
         {
             _detector = detector;
             _state = state;
             _config = config;
+            _camera = camera;
+            _cameraConfig = cameraConfig;
         }
 
         public void OnMouse(MouseEventTypes eventType, int x, int y, MouseEventFlags flags, IntPtr userData)
@@ -86,6 +91,12 @@ namespace ComputerVision_LED_Console.App
                 _state.SelectedMarkerIndex = -1;
                 return KeyAction.Rescan;
             }
+
+            if (key == '=' || key == '+') { _camera.AdjustZoom(+_cameraConfig.ZoomStep); return KeyAction.Continue; }
+            if (key == '-' || key == '_') { _camera.AdjustZoom(-_cameraConfig.ZoomStep); return KeyAction.Continue; }
+            if (key == '.') { _camera.AdjustExposure(+_cameraConfig.ExposureStep); return KeyAction.Continue; }
+            if (key == ',') { _camera.AdjustExposure(-_cameraConfig.ExposureStep); return KeyAction.Continue; }
+            if (key == 'a' || key == 'A') { _camera.ToggleAutoExposure(); return KeyAction.Continue; }
 
             int sel = _state.SelectedMarkerIndex;
             if (sel >= 0 && sel < _detector.Rois.Count)

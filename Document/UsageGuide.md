@@ -46,6 +46,9 @@ The video window must be the focused window for these to register.
 | **C** | Calibrate the selected marker (two-step: press while LED is ON, then again while OFF) |
 | **[** / **]** | Nudge the selected marker's **On threshold** down / up by 5 |
 | **;** / **'** | Nudge the selected marker's **Off threshold** down / up by 5 |
+| **+** / **-** | Zoom in / out (hardware UVC zoom on supported cams, digital crop+resize otherwise) |
+| **,** / **.** | Exposure down / up (darker is generally better for LED detection). Auto-switches camera to manual mode. |
+| **A** | Toggle auto-exposure on / off |
 | **Q** or **Esc** | Quit |
 
 The label on each marker shows state, current brightness, and (for the selected marker) the active thresholds.
@@ -64,6 +67,17 @@ All tunables live under `Config/`. Defaults are set in each class.
 - `FourCC` — default `"MJPG"`; change only if your camera can't speak MJPEG
 - `MaxProbeIndex` — highest index checked during probe (default 5)
 - `DisplayMaxWidth` — downscale display if frame is wider than this (default 1280)
+- `AutoExposure` — start in auto-exposure mode (default **true**). Set `false` to apply `InitialExposure` at startup.
+- `InitialExposure` — DSHOW log₂-seconds exposure, applied when `AutoExposure=false` (default **-6.0**, ≈ 1/64 s). Typical Logitech range is `-11..-1`.
+- `ExposureMin` / `ExposureMax` / `ExposureStep` — bounds and step for the runtime `,`/`.` hotkeys (defaults `-11`, `-1`, `1.0`).
+- `InitialZoomFactor` — zoom applied at startup (default **1.0** = no zoom).
+- `MinZoomFactor` / `MaxZoomFactor` / `ZoomStep` — bounds and step for the runtime `+`/`-` hotkeys (defaults `1.0`, `5.0`, `0.25`).
+
+### Camera tuning notes (Logitech UVC)
+
+- **Manual exposure is recommended for LED detection.** With auto-exposure on, the driver darkens the whole frame when the LED turns ON and brightens it when the LED turns OFF — exactly the opposite of what hysteresis thresholds expect. Press `A` to go manual, then `,` until the background is near black. The LED ON should now read clearly above your `DefaultOnThreshold`.
+- **Hardware vs digital zoom.** On Logitech C920, C922, Brio, and similar, `+`/`-` drives the camera's built-in UVC zoom — no frame crop. On models without UVC zoom (C270 and many integrated laptop cams), the app falls back to centered crop+resize automatically. The hotkeys behave identically from the user's perspective. The startup log line `Zoom: hardware UVC zoom supported` vs `Zoom: hardware UVC zoom not available; digital crop+resize will be used` tells you which mode you're in.
+- **DSHOW exposure values are log₂-seconds.** `-6` ≈ 1/64 s, `-8` ≈ 1/256 s, `-11` ≈ 1/2048 s. The camera may snap your requested value to its nearest supported step — the `[INFO ]` log prints both the requested value and the camera's reported readback.
 
 ### `Config/DetectionConfig.cs`
 - `DefaultOnThreshold` / `DefaultOffThreshold` — initial hysteresis values per marker (150 / 120)
@@ -419,6 +433,12 @@ Each status tick writes to every connected client. A dead socket is detected on 
 
 **Binary TCP port `9091` won't bind**
 Something else on the host owns the port. The app logs `[ERROR]` and continues without the binary stream. Change `NetworkConfig.TcpBinaryPort` or free the port — `netstat -ano | findstr :9091` identifies the PID.
+
+**`+` / `-` doesn't visibly zoom**
+Your camera reported no UVC zoom support, so the app should have automatically switched to digital crop+resize. Check the startup `[INFO ]` line — if it says `digital crop+resize will be used`, pressing `+` should still produce a visible zoom. If neither mode works, confirm the window is focused; hotkeys only register when the video window has focus.
+
+**LED still flickers between ON/OFF after tuning thresholds**
+Check whether auto-exposure is on — it's the most common culprit. Press `A` to go manual, then `,` a few times to darken the frame. The LED ON region should sit well above `DefaultOnThreshold` and the background well below `DefaultOffThreshold`. Threshold tuning fights a losing battle if the driver keeps rescaling the overall brightness.
 
 **App exits immediately after "Using camera index..."**
 OpenCvSharp native runtime is missing. Confirm the `OpenCvSharp4.runtime.win` NuGet package restored. A full `dotnet clean && dotnet restore && dotnet build` usually fixes it.

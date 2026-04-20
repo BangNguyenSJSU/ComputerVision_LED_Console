@@ -19,8 +19,8 @@ namespace ComputerVision_LED_Console
             var detector = new LedDetector(config.Detection, time);
             var state = new AppState();
             var renderer = new OverlayRenderer(state);
-            var input = new InputHandler(detector, state, config.Detection);
             using var camera = new OpenCvCameraSource(config.Camera);
+            var input = new InputHandler(detector, state, config.Detection, camera, config.Camera);
 
             var publishers = new List<IStatusPublisher>();
             if (config.Network.HttpEnabled)

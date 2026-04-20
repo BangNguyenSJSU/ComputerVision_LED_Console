@@ -25,6 +25,7 @@ namespace ComputerVision_LED_Console.App
         private readonly InputHandler _input;
         private readonly AppState _state;
         private readonly IReadOnlyList<IStatusPublisher> _publishers;
+        private MouseCallback? _mouseCallback;
 
         public AppController(
             AppConfig config,
@@ -60,7 +61,8 @@ namespace ComputerVision_LED_Console.App
             PrintControlsHelp();
 
             Cv2.NamedWindow(WindowName);
-            Cv2.SetMouseCallback(WindowName, _input.OnMouse);
+            _mouseCallback = _input.OnMouse;
+            Cv2.SetMouseCallback(WindowName, _mouseCallback);
 
             foreach (var pub in _publishers) pub.Start();
 
@@ -123,6 +125,9 @@ namespace ComputerVision_LED_Console.App
             Console.WriteLine($"  - [ / ]  nudge On threshold by {_config.Detection.ThresholdStep} (down / up).");
             Console.WriteLine($"  - ; / '  nudge Off threshold by {_config.Detection.ThresholdStep} (down / up).");
             Console.WriteLine($"  - Minimum gap of {_config.Detection.MinThresholdGap} is enforced to prevent flicker.");
+            Console.WriteLine($"  - + / -  zoom in / out (step {_config.Camera.ZoomStep:F2}x, range {_config.Camera.MinZoomFactor:F1}..{_config.Camera.MaxZoomFactor:F1}x).");
+            Console.WriteLine($"  - . / ,  exposure up / down (step {_config.Camera.ExposureStep:F1}, auto-switches to manual).");
+            Console.WriteLine("  - A      toggle auto-exposure on / off.");
         }
     }
 }
