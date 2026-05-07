@@ -20,9 +20,10 @@ namespace ComputerVision_LED_Console
             var detector = new LedDetector(config.Detection, time);
             if (snapshot.Markers.Count > 0) detector.RestoreMarkers(snapshot.Markers);
             var state = new AppState();
+            var auth = new AuthGate(config.Security, state);
             var renderer = new OverlayRenderer(state);
             using var camera = new OpenCvCameraSource(config.Camera);
-            var input = new InputHandler(detector, state, config.Detection, camera, config.Camera);
+            var input = new InputHandler(detector, state, config.Detection, camera, config.Camera, auth);
 
             var publishers = new List<IStatusPublisher>();
             if (config.Network.HttpEnabled)
@@ -38,7 +39,7 @@ namespace ComputerVision_LED_Console
                 publishers.Add(new TcpBinaryStatusServer(config.Network, status));
             }
 
-            var app = new AppController(config, camera, detector, status, time, renderer, input, state, publishers);
+            var app = new AppController(config, camera, detector, status, time, renderer, input, state, auth, publishers);
             app.Run();
         }
     }

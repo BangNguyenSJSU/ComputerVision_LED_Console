@@ -60,7 +60,9 @@ namespace ComputerVision_LED_Console.Vision
 
         // ---- Mutators ----
 
-        public int AddRoi(float x, float y, int radius)
+        public int AddRoi(float x, float y, int radius) => AddRoi(x, y, radius, LedColor.Unknown);
+
+        public int AddRoi(float x, float y, int radius, LedColor color)
         {
             var roi = new RoiConfig
             {
@@ -70,13 +72,16 @@ namespace ComputerVision_LED_Console.Vision
                 Radius = radius,
                 OnThreshold = _config.DefaultOnThreshold,
                 OffThreshold = _config.DefaultOffThreshold,
+                Color = color,
                 State = LedStatus.Off,
             };
             _rois.Add(roi);
             return _rois.Count - 1;
         }
 
-        public int AddManualRoi(float x, float y) => AddRoi(x, y, _config.DefaultManualRadius);
+        public int AddManualRoi(float x, float y) => AddManualRoi(x, y, LedColor.Unknown);
+
+        public int AddManualRoi(float x, float y, LedColor color) => AddRoi(x, y, _config.DefaultManualRadius, color);
 
         public bool RemoveRoiAt(int index)
         {
@@ -88,6 +93,7 @@ namespace ComputerVision_LED_Console.Vision
         public void Clear()
         {
             _rois.Clear();
+            _nextId = 1;
         }
 
         public void RestoreMarkers(IEnumerable<MarkerSnapshot> snapshots)
@@ -104,6 +110,7 @@ namespace ComputerVision_LED_Console.Vision
                     Radius = m.Radius,
                     OnThreshold = m.OnThreshold,
                     OffThreshold = m.OffThreshold,
+                    Color = m.Color,
                     State = LedStatus.Unknown,
                 });
                 if (m.Id > maxId) maxId = m.Id;
@@ -116,6 +123,14 @@ namespace ComputerVision_LED_Console.Vision
             if (index < 0 || index >= _rois.Count) return;
             _rois[index].CenterX = x;
             _rois[index].CenterY = y;
+        }
+
+        public void AdjustRoiRadius(int index, int delta)
+        {
+            if (index < 0 || index >= _rois.Count) return;
+            var roi = _rois[index];
+            int next = roi.Radius + delta;
+            roi.Radius = Math.Clamp(next, _config.MinRoiRadius, _config.MaxRoiRadius);
         }
 
         public int FindRoiAt(float x, float y)
@@ -182,6 +197,7 @@ namespace ComputerVision_LED_Console.Vision
                 {
                     MarkerId = roi.Id,
                     Status = LedStatus.Unknown,
+                    Color = roi.Color,
                     Brightness = 0,
                     TimestampUtc = _time.UtcNow,
                 };
@@ -202,9 +218,35 @@ namespace ComputerVision_LED_Console.Vision
             {
                 MarkerId = roi.Id,
                 Status = roi.State,
+                Color = roi.Color,
                 Brightness = brightness,
                 TimestampUtc = _time.UtcNow,
             };
+        }
+
+        public LedColor ClassifyColorAt(FrameData frame, float x, float y)
+        {
+            int px = (int)Math.Round(x);
+            int py = (int)Math.Round(y);
+            if (px < 0 || py < 0 || px >= frame.Frame.Width || py >= frame.Frame.Height)
+            {
+                return LedColor.Unknown;
+            }
+
+            using var pixelBgr = new Mat(frame.Frame, new Rect(px, py, 1, 1));
+            using var pixelHsv = new Mat();
+            Cv2.CvtColor(pixelBgr, pixelHsv, ColorConversionCodes.BGR2HSV);
+            var hsv = pixelHsv.At<Vec3b>(0, 0);
+            int h = hsv.Item0, s = hsv.Item1, v = hsv.Item2;
+
+            if (s < _config.SaturationLow || s > _config.SaturationHigh) return LedColor.Unknown;
+            if (v < _config.ValueLow || v > _config.ValueHigh) return LedColor.Unknown;
+
+            if (_config.DetectYellow && h >= _config.HueLow && h <= _config.HueHigh) return LedColor.Yellow;
+            if (_config.DetectRed && ((h >= _config.RedHueLow1 && h <= _config.RedHueHigh1) || (h >= _config.RedHueLow2 && h <= _config.RedHueHigh2))) return LedColor.Red;
+            if (_config.DetectGreen && h >= _config.GreenHueLow && h <= _config.GreenHueHigh) return LedColor.Green;
+
+            return LedColor.Unknown;
         }
 
         public IReadOnlyList<DetectionResult> EvaluateAll(FrameData frame)
@@ -222,13 +264,38 @@ namespace ComputerVision_LED_Console.Vision
             using var hsv = new Mat();
             Cv2.CvtColor(frame.Frame, hsv, ColorConversionCodes.BGR2HSV);
 
-            using var mask = BuildColorMask(hsv);
+            int added = 0;
+            if (_config.DetectYellow)
+            {
+                added += RunBand(hsv, LedColor.Yellow, _config.HueLow, _config.HueHigh);
+            }
+            if (_config.DetectRed)
+            {
+                added += RunBand(hsv, LedColor.Red, _config.RedHueLow1, _config.RedHueHigh1);
+                added += RunBand(hsv, LedColor.Red, _config.RedHueLow2, _config.RedHueHigh2);
+            }
+            if (_config.DetectGreen)
+            {
+                added += RunBand(hsv, LedColor.Green, _config.GreenHueLow, _config.GreenHueHigh);
+            }
+
+            Logger.Info($"Detected {added} LED(s) (total markers: {_rois.Count}).");
+        }
+
+        private int RunBand(Mat hsv, LedColor color, int hLo, int hHi)
+        {
+            using var band = new Mat();
+            Cv2.InRange(
+                hsv,
+                new Scalar(hLo, _config.SaturationLow, _config.ValueLow),
+                new Scalar(hHi, _config.SaturationHigh, _config.ValueHigh),
+                band);
 
             using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
-            Cv2.MorphologyEx(mask, mask, MorphTypes.Open, kernel);
+            Cv2.MorphologyEx(band, band, MorphTypes.Open, kernel);
 
             Cv2.FindContours(
-                mask,
+                band,
                 out Point[][] contours,
                 out _,
                 RetrievalModes.External,
@@ -240,39 +307,12 @@ namespace ComputerVision_LED_Console.Vision
                 Cv2.MinEnclosingCircle(c, out Point2f center, out float radius);
                 int r = (int)Math.Round(radius);
                 if (r < _config.MinDetectRadius || r > _config.MaxDetectRadius) continue;
-
                 if (IsDuplicate(center.X, center.Y)) continue;
 
-                AddRoi(center.X, center.Y, r);
+                AddRoi(center.X, center.Y, r, color);
                 added++;
             }
-
-            Logger.Info($"Detected {added} LED(s) (total markers: {_rois.Count}).");
-        }
-
-        private Mat BuildColorMask(Mat hsv)
-        {
-            var mask = new Mat(hsv.Size(), MatType.CV_8UC1, Scalar.All(0));
-            int sLow = _config.SaturationLow, sHigh = _config.SaturationHigh;
-            int vLow = _config.ValueLow, vHigh = _config.ValueHigh;
-
-            if (_config.DetectYellow)
-            {
-                OrInRange(hsv, mask, _config.HueLow, _config.HueHigh, sLow, sHigh, vLow, vHigh);
-            }
-            if (_config.DetectRed)
-            {
-                OrInRange(hsv, mask, _config.RedHueLow1, _config.RedHueHigh1, sLow, sHigh, vLow, vHigh);
-                OrInRange(hsv, mask, _config.RedHueLow2, _config.RedHueHigh2, sLow, sHigh, vLow, vHigh);
-            }
-            return mask;
-        }
-
-        private static void OrInRange(Mat hsv, Mat mask, int hLo, int hHi, int sLo, int sHi, int vLo, int vHi)
-        {
-            using var band = new Mat();
-            Cv2.InRange(hsv, new Scalar(hLo, sLo, vLo), new Scalar(hHi, sHi, vHi), band);
-            Cv2.BitwiseOr(mask, band, mask);
+            return added;
         }
 
         private bool IsDuplicate(float x, float y)

@@ -30,8 +30,23 @@ namespace ComputerVision_LED_Console.App
 
             DrawMarkers(displayFrame, rois, results, selectedIndex);
             DrawHud(displayFrame, rois.Count);
+            DrawLockedChipIfLocked(displayFrame);
             DrawCalibrationPromptIfActive(displayFrame, rois, selectedIndex);
             Show(windowName, displayFrame);
+        }
+
+        private void DrawLockedChipIfLocked(Mat displayFrame)
+        {
+            if (_state.Unlocked) return;
+            int x = displayFrame.Width - 130;
+            Cv2.PutText(
+                displayFrame,
+                "LOCKED",
+                new Point(x, 35),
+                HersheyFonts.HersheySimplex,
+                0.8,
+                WarnColor,
+                2);
         }
 
         private static void DrawMarkers(
@@ -49,7 +64,14 @@ namespace ComputerVision_LED_Console.App
                 int thickness = (i == selectedIndex) ? 3 : 2;
                 Cv2.Circle(displayFrame, (int)roi.CenterX, (int)roi.CenterY, roi.Radius, color, thickness);
 
-                string stateText = result.Status.ToString().ToUpperInvariant();
+                string colorLetter = result.Color switch
+                {
+                    LedColor.Red => "R",
+                    LedColor.Yellow => "Y",
+                    LedColor.Green => "G",
+                    _ => "",
+                };
+                string stateText = $"{colorLetter}{result.MarkerId}-{result.Status.ToString().ToUpperInvariant()}";
                 string label = (i == selectedIndex)
                     ? $"{stateText} ({result.Brightness:F0}) [on>={roi.OnThreshold:F0} off<={roi.OffThreshold:F0}]"
                     : $"{stateText} ({result.Brightness:F0})";

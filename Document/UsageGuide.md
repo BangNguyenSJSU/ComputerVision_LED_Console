@@ -25,11 +25,12 @@ dotnet run
 
 On launch:
 
-1. The console scans camera indices 0–5 and prints the working ones.
-2. You pick a camera (press Enter for the first one).
-3. A video window titled **LED Detection** opens.
-4. On the first frame the app auto-detects yellow LEDs and places a circle around each.
-5. The running app prints `[INFO ] Detected N yellow LED(s).` and `[INFO ] HTTP status server listening on ...` if network publishers are enabled.
+1. The console scans camera indices 0–5 and prints the working ones, paired with their Windows DirectShow `FriendlyName` so each entry reads e.g. `[1] Logitech HD Pro Webcam C920 — index 1`.
+2. You pick a camera (press Enter for the first one). The negotiated camera name and resolution are echoed by the `[INFO ] Camera negotiated: '...'` line so you can confirm which device opened.
+3. If the settings lock is enabled but no password has been set, the console prompts you to set one before the video window opens (press Enter to skip and run unlocked for this session).
+4. A video window titled **LED Detection** opens.
+5. On the first frame the app auto-detects red, yellow, and green LEDs and places a circle around each.
+6. The running app prints `[INFO ] Detected N LED(s).` and `[INFO ] HTTP status server listening on ...` if network publishers are enabled.
 
 ---
 
@@ -42,7 +43,8 @@ The video window must be the focused window for these to register.
 | **Left-click** (empty area) | Add a manual LED marker at that point |
 | **Left-click + drag** (on marker) | Move the marker |
 | **Right-click** (on marker) | Delete the marker |
-| **R** | Clear all markers and re-run auto-detect on the current frame |
+| **Mouse wheel** (over a marker) | Grow / shrink that marker's ROI radius. If no marker is under the cursor, the wheel resizes the currently selected marker. |
+| **R** | Clear all markers, reset the marker-id counter, and re-run auto-detect on the current frame |
 | **C** | Calibrate the selected marker (two-step: press while LED is ON, then again while OFF) |
 | **[** / **]** | Nudge the selected marker's **On threshold** down / up by 5 |
 | **;** / **'** | Nudge the selected marker's **Off threshold** down / up by 5 |
@@ -50,9 +52,31 @@ The video window must be the focused window for these to register.
 | **,** / **.** | Exposure down / up (darker is generally better for LED detection). Auto-switches camera to manual mode. |
 | **A** | Toggle auto-exposure on / off |
 | **S** | Save current markers + settings to `config_ComputerVisionLed.txt` |
+| **U** | Prompt for password on the console to unlock editing |
+| **L** | Re-lock for the rest of the session (no password required) |
+| **P** | Password prompt that toggles the lock — enter the password to unlock if locked, or to lock if unlocked |
 | **Q** or **Esc** | Quit (also auto-saves) |
 
-The label on each marker shows state, current brightness, and (for the selected marker) the active thresholds.
+### HUD label format
+
+Each marker is drawn as a colored circle with a label of the form:
+
+```
+<color><id>-<state> (<brightness>)
+```
+
+Worked examples:
+
+| Label | Decoded |
+|---|---|
+| `R1-ON (29)` | Red marker, id 1, currently ON, mean ROI brightness 29 |
+| `Y3-OFF (8)` | Yellow marker, id 3, currently OFF, brightness 8 |
+| `G5-ON (40)` | Green marker, id 5, currently ON, brightness 40 |
+| `7-ON (12)` | Marker id 7 with `Unknown` color (color letter omitted), ON, brightness 12 |
+
+The selected marker (most recently clicked, dragged, or wheel-resized) gets two extra fields appended showing its active thresholds, e.g. `R1-ON (29) [on>=24 off<=12]`. Use this to confirm what `[`/`]`/`;`/`'` are tuning.
+
+The marker id is the monotonic integer assigned by `LedDetector.AddRoi` when the marker is created. It is stable for the marker's lifetime, persists through save/load, and resets to 1 on every `R` rescan. A red ring means OFF, a green ring means ON; the selected marker's ring is drawn thicker.
 
 ---
 
@@ -88,6 +112,10 @@ All tunables live under `Config/`. Defaults are set in each class.
 - `MinDetectRadius` / `MaxDetectRadius` — auto-detect radius bounds in pixels
 - `DefaultManualRadius` — radius for a manually placed marker (default 20)
 - `HueLow`/`HueHigh`, `SaturationLow`/`SaturationHigh`, `ValueLow`/`ValueHigh` — HSV range for yellow (20–35, 100–255, 150–255)
+- `DetectRed` + `RedHueLow1`/`RedHueHigh1` + `RedHueLow2`/`RedHueHigh2` — red wraps the hue circle, so two sub-ranges (defaults 0–10 and 170–180) are OR-ed together
+- `DetectGreen` + `GreenHueLow`/`GreenHueHigh` — HSV hue range for green (default 40–85). Shares the saturation/value bounds above.
+
+Each marker is tagged with the color band it was detected in (or `Unknown` for manual clicks that miss every band). The color travels with the marker through detection, persistence, JSON, and the binary TCP stream.
 
 ### `Config/NetworkConfig.cs`
 - `HttpEnabled` — serve `GET /status` on localhost (default **true** during dev, set to `false` to disable)
@@ -145,6 +173,7 @@ Both HTTP and TCP publish the same `SystemStatus` payload, serialized with camel
     {
       "markerId": 1,
       "status": "On",
+      "color": "Yellow",
       "brightness": 187.4,
       "timestampUtc": "2026-04-17T21:59:23.192Z"
     }
@@ -155,6 +184,7 @@ Both HTTP and TCP publish the same `SystemStatus` payload, serialized with camel
 Field notes:
 - `markerId` is a monotonic integer assigned when the marker is created. It resets when the app restarts.
 - `status` is one of `"Unknown"`, `"Off"`, `"On"`. `Unknown` only appears for a brand-new marker that has never been evaluated (or whose ROI fell outside the frame).
+- `color` is one of `"Unknown"`, `"Red"`, `"Yellow"`, `"Green"`. AutoDetect tags each marker with the color band it matched; manual clicks sample HSV at the click point and tag the same way (or fall back to `Unknown` if no band matches).
 - `brightness` is the mean grayscale value of the ROI (0–255).
 - Both timestamps are ISO-8601 UTC. The outer `timestampUtc` is the moment `StatusService.Update` was called; each per-LED `timestampUtc` is the moment that detection was computed (within the same tick).
 
@@ -353,14 +383,32 @@ Per captured frame, one self-delimiting frame is written:
 
 - `N` — LED count, unsigned byte (0–255).
 - `iK` — `MarkerId` as an unsigned byte. **Markers with `MarkerId > 255` are skipped** from the binary stream (a warn log is emitted once per overflow id). The JSON stream still reports them.
-- `sK` — `LedStatus` as an unsigned byte:
-  - `0x00` = `Unknown`
-  - `0x01` = `Off`
-  - `0x02` = `On`
+- `sK` — packed status byte. **High nibble = `LedColor`, low nibble = `LedStatus`** (each enum fits in 4 bits):
+
+| Nibble | Value | Meaning |
+|---|---|---|
+| Low (status) | `0x0` | `Unknown` |
+| Low (status) | `0x1` | `Off` |
+| Low (status) | `0x2` | `On` |
+| High (color) | `0x0` | `Unknown` |
+| High (color) | `0x1` | `Red` |
+| High (color) | `0x2` | `Yellow` |
+| High (color) | `0x3` | `Green` |
+
+Worked examples:
+
+| Status byte | Decoded |
+|---|---|
+| `0x02` | Unknown-color, ON (back-compat for un-tagged markers) |
+| `0x21` | Yellow, OFF |
+| `0x22` | Yellow, ON |
+| `0x32` | Green, ON |
+
+Decode in code: `status = byte & 0x0F; color = (byte >> 4) & 0x0F;`. A reader written before the color field shipped — and which checks only `byte == 0x01` / `byte == 0x02` — will silently miss color-tagged markers. Either mask the low nibble or update the reader.
 
 When no markers exist, a single `0x00` byte is sent per tick — this acts as a heartbeat and keeps the tick cadence predictable.
 
-Example: 2 LEDs, id=1 ON, id=2 OFF → `02 01 02 02 01` (5 bytes).
+Example: 2 LEDs, id=1 yellow ON, id=2 yellow OFF → `02 01 22 02 21` (5 bytes).
 
 ### Python — streaming reader
 
@@ -369,6 +417,7 @@ import socket
 
 HOST, PORT = "127.0.0.1", 9091
 STATUS = {0: "Unknown", 1: "Off", 2: "On"}
+COLOR = {0: "Unknown", 1: "Red", 2: "Yellow", 3: "Green"}
 
 with socket.create_connection((HOST, PORT)) as sock:
     buf = b""
@@ -387,16 +436,18 @@ with socket.create_connection((HOST, PORT)) as sock:
             buf = buf[frame_len:]
             print(f"raw: {frame.hex(' ')}")
             for i in range(n):
-                mid, st = payload[2 * i], payload[2 * i + 1]
-                print(f"  LED #{mid}: {STATUS.get(st, '?')}")
+                mid, packed = payload[2 * i], payload[2 * i + 1]
+                st = packed & 0x0F
+                col = (packed >> 4) & 0x0F
+                print(f"  LED #{mid}: {COLOR.get(col, '?')} {STATUS.get(st, '?')}")
 ```
 
-Example output for a tick with 2 LEDs (id=1 ON, id=2 OFF):
+Example output for a tick with 2 LEDs (id=1 yellow ON, id=2 yellow OFF):
 
 ```
-raw: 02 01 02 02 01
-  LED #1: On
-  LED #2: Off
+raw: 02 01 22 02 21
+  LED #1: Yellow On
+  LED #2: Yellow Off
 ```
 
 ### Python — only act on edges
@@ -406,6 +457,7 @@ import socket
 
 HOST, PORT = "127.0.0.1", 9091
 STATUS = {0: "Unknown", 1: "Off", 2: "On"}
+COLOR = {0: "Unknown", 1: "Red", 2: "Yellow", 3: "Green"}
 last = {}
 
 with socket.create_connection((HOST, PORT)) as sock:
@@ -423,10 +475,12 @@ with socket.create_connection((HOST, PORT)) as sock:
             payload = buf[1:frame_len]
             buf = buf[frame_len:]
             for i in range(n):
-                mid, st = payload[2 * i], payload[2 * i + 1]
-                if last.get(mid) != st:
-                    last[mid] = st
-                    print(f"LED #{mid} -> {STATUS.get(st, '?')}")
+                mid, packed = payload[2 * i], payload[2 * i + 1]
+                st = packed & 0x0F
+                col = (packed >> 4) & 0x0F
+                if last.get(mid) != packed:
+                    last[mid] = packed
+                    print(f"LED #{mid} -> {COLOR.get(col, '?')} {STATUS.get(st, '?')}")
 ```
 
 ### Quick sanity check with ncat
@@ -472,6 +526,48 @@ Check whether auto-exposure is on — it's the most common culprit. Press `A` to
 
 **App exits immediately after "Using camera index..."**
 OpenCvSharp native runtime is missing. Confirm the `OpenCvSharp4.runtime.win` NuGet package restored. A full `dotnet clean && dotnet restore && dotnet build` usually fixes it.
+
+---
+
+## Security — settings lock
+
+The app ships with a session-scoped settings lock. When locked, the video feed and HTTP/TCP publishing keep running but **mouse edits, threshold/calibration keys, camera controls, and save are blocked**. `Q`/`Esc` (quit) and `R` (rescan) always work.
+
+### First launch
+
+If `Security.LockEnabled` is true (default) and no password is configured yet, the console prompts:
+
+```
+Settings lock is enabled but no password is set.
+Enter a password to enable the lock (or press Enter to leave it disabled for this session): ___
+```
+
+- Type a password and press Enter — the app hashes it (PBKDF2-SHA256, 100 000 iterations, 16-byte salt) and writes the hash + salt into `config_ComputerVisionLed.txt`. Every subsequent launch starts locked until you press `U` and type the password.
+- Press Enter with no input — the lock stays disabled for this session, and the warning is logged.
+
+### Unlocking and re-locking
+
+- Press **U** while the video window is focused — the console prompts `Password: `. Type it and press Enter. Correct password unlocks editing for the rest of the session; wrong password keeps the lock and logs a warning.
+- Press **L** to re-lock at any time without quitting.
+- The HUD shows a red **LOCKED** chip in the top-right corner whenever the lock is engaged.
+
+### What is gated
+
+| Action | Locked | Unlocked |
+|---|---|---|
+| Mouse add/move/delete markers | blocked | allowed |
+| `[` `]` `;` `'` `C` per-marker tuning | blocked | allowed |
+| `+` `-` `,` `.` `A` camera controls | blocked | allowed |
+| `S` save / auto-save on quit | blocked | allowed |
+| `Q` `Esc` quit | always | always |
+| `R` rescan | always | always |
+| `U` unlock prompt / `L` re-lock / `P` password toggle | always | always |
+
+### Caveats
+
+- This is a **UX guardrail, not real authentication.** `config_ComputerVisionLed.txt` remains a plain-text JSON file under the executable's directory — anyone who can edit that file can clear the password fields, change the hash, or set `lockEnabled` to `false`. The lock prevents accidental misuse, not a determined attacker.
+- The password prompt masks input with `*` per keystroke. Backspace edits the buffer, Enter submits, and Esc cancels. If stdin is redirected (piped input or test harness), the prompt falls back to plain `Console.ReadLine` so automated drivers still work.
+- Resetting a forgotten password: blank out `passwordHash` and `passwordSalt` in `config_ComputerVisionLed.txt`. The next launch behaves like a fresh first-run and prompts you to set a new password.
 
 ---
 

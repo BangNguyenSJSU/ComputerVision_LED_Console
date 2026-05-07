@@ -6,5 +6,6 @@ namespace ComputerVision_LED_Console.App
         public int SelectedMarkerIndex { get; set; } = -1;
         public int DragMarkerIndex { get; set; } = -1;
         public double DisplayScale { get; set; } = 1.0;
+        public bool Unlocked { get; set; }
     }
 }

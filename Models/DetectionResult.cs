@@ -6,6 +6,7 @@ namespace ComputerVision_LED_Console.Models
     {
         public int MarkerId { get; set; }
         public LedStatus Status { get; set; }
+        public LedColor Color { get; set; }
         public double Brightness { get; set; }
         public DateTime TimestampUtc { get; set; }
     }

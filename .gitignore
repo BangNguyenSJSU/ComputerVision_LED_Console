@@ -46,6 +46,9 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
+# VS Code Code Runner scratch file
+tempCodeRunnerFile.*
+
 # OS
 .DS_Store
 

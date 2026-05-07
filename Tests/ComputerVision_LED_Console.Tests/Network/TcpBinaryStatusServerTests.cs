@@ -62,8 +62,8 @@ public class TcpBinaryStatusServerTests : IDisposable
         await Task.Delay(200);
 
         var seed = new SystemStatus();
-        seed.Leds.Add(new DetectionResult { MarkerId = 1, Status = LedStatus.On });
-        seed.Leds.Add(new DetectionResult { MarkerId = 2, Status = LedStatus.Off });
+        seed.Leds.Add(new DetectionResult { MarkerId = 1, Status = LedStatus.On, Color = LedColor.Yellow });
+        seed.Leds.Add(new DetectionResult { MarkerId = 2, Status = LedStatus.Off, Color = LedColor.Yellow });
         _status.Update(seed);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -74,9 +74,9 @@ public class TcpBinaryStatusServerTests : IDisposable
 
         var payload = await ReadExactAsync(stream, 4, cts.Token);
         Assert.Equal(1, payload[0]);
-        Assert.Equal((byte)LedStatus.On, payload[1]);
+        Assert.Equal(0x22, payload[1]); // Yellow(2) << 4 | On(2)
         Assert.Equal(2, payload[2]);
-        Assert.Equal((byte)LedStatus.Off, payload[3]);
+        Assert.Equal(0x21, payload[3]); // Yellow(2) << 4 | Off(1)
     }
 
     [Fact]
@@ -158,5 +158,32 @@ public class TcpBinaryStatusServerTests : IDisposable
         _server.Stop();
 
         Assert.False(_server.IsRunning);
+    }
+
+    [Theory]
+    [InlineData(LedColor.Red,    LedStatus.Off, 0x11)]
+    [InlineData(LedColor.Red,    LedStatus.On,  0x12)]
+    [InlineData(LedColor.Yellow, LedStatus.Off, 0x21)]
+    [InlineData(LedColor.Yellow, LedStatus.On,  0x22)]
+    [InlineData(LedColor.Green,  LedStatus.Off, 0x31)]
+    [InlineData(LedColor.Green,  LedStatus.On,  0x32)]
+    [InlineData(LedColor.Unknown, LedStatus.Unknown, 0x00)]
+    public async Task ColorAndStatus_PackedIntoStatusByte(LedColor color, LedStatus status, byte expected)
+    {
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, _port);
+        await Task.Delay(200);
+
+        var seed = new SystemStatus();
+        seed.Leds.Add(new DetectionResult { MarkerId = 1, Status = status, Color = color });
+        _status.Update(seed);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var stream = client.GetStream();
+        var frame = await ReadExactAsync(stream, 3, cts.Token);
+
+        Assert.Equal(1, frame[0]);
+        Assert.Equal(1, frame[1]);
+        Assert.Equal(expected, frame[2]);
     }
 }

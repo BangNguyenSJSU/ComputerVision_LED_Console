@@ -171,4 +171,65 @@ public class LedDetectorHysteresisTests
         Assert.False(detector.RemoveRoiAt(0));
         Assert.False(detector.RemoveRoiAt(-1));
     }
+
+    [Fact]
+    public void AdjustRoiRadius_GrowsBySpecifiedDelta()
+    {
+        var detector = new LedDetector(new DetectionConfig(), new SystemTimeProvider());
+        detector.AddRoi(0, 0, 10);
+
+        detector.AdjustRoiRadius(0, +5);
+
+        Assert.Equal(15, detector.Rois[0].Radius);
+    }
+
+    [Fact]
+    public void AdjustRoiRadius_ClampsToMaxRoiRadius()
+    {
+        var cfg = new DetectionConfig { MaxRoiRadius = 20 };
+        var detector = new LedDetector(cfg, new SystemTimeProvider());
+        detector.AddRoi(0, 0, 18);
+
+        detector.AdjustRoiRadius(0, +10);
+
+        Assert.Equal(20, detector.Rois[0].Radius);
+    }
+
+    [Fact]
+    public void AdjustRoiRadius_ClampsToMinRoiRadius()
+    {
+        var cfg = new DetectionConfig { MinRoiRadius = 2 };
+        var detector = new LedDetector(cfg, new SystemTimeProvider());
+        detector.AddRoi(0, 0, 5);
+
+        detector.AdjustRoiRadius(0, -10);
+
+        Assert.Equal(2, detector.Rois[0].Radius);
+    }
+
+    [Fact]
+    public void Clear_ResetsIdCounter()
+    {
+        var detector = new LedDetector(new DetectionConfig(), new SystemTimeProvider());
+        detector.AddRoi(0, 0, 10);
+        detector.AddRoi(10, 10, 10);
+        Assert.Equal(2, detector.Rois[1].Id);
+
+        detector.Clear();
+        detector.AddRoi(50, 50, 10);
+
+        Assert.Equal(1, detector.Rois[0].Id);
+    }
+
+    [Fact]
+    public void AdjustRoiRadius_OutOfRangeIndex_NoOp()
+    {
+        var detector = new LedDetector(new DetectionConfig(), new SystemTimeProvider());
+        detector.AddRoi(0, 0, 10);
+
+        detector.AdjustRoiRadius(5, +5);
+        detector.AdjustRoiRadius(-1, +5);
+
+        Assert.Equal(10, detector.Rois[0].Radius);
+    }
 }

@@ -1,3 +1,5 @@
+using ComputerVision_LED_Console.Models;
+
 namespace ComputerVision_LED_Console.Config
 {
     public class MarkerSnapshot
@@ -8,5 +10,6 @@ namespace ComputerVision_LED_Console.Config
         public int Radius { get; set; }
         public double OnThreshold { get; set; }
         public double OffThreshold { get; set; }
+        public LedColor Color { get; set; } = LedColor.Unknown;
     }
 }

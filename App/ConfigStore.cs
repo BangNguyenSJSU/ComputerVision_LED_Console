@@ -69,6 +69,7 @@ namespace ComputerVision_LED_Console.App
                     Radius = m.Radius,
                     OnThreshold = m.OnThreshold,
                     OffThreshold = m.OffThreshold,
+                    Color = m.Color,
                 });
             }
 

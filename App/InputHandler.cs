@@ -1,6 +1,7 @@
 using System;
 using ComputerVision_LED_Console.Camera;
 using ComputerVision_LED_Console.Config;
+using ComputerVision_LED_Console.Models;
 using ComputerVision_LED_Console.Vision;
 using OpenCvSharp;
 
@@ -12,6 +13,9 @@ namespace ComputerVision_LED_Console.App
         Quit,
         Rescan,
         Save,
+        UnlockPrompt,
+        Lock,
+        PasswordToggle,
     }
 
     public class InputHandler
@@ -21,18 +25,25 @@ namespace ComputerVision_LED_Console.App
         private readonly DetectionConfig _config;
         private readonly ICameraSource _camera;
         private readonly CameraConfig _cameraConfig;
+        private readonly AuthGate _auth;
+        private Func<float, float, LedColor>? _colorSampler;
 
-        public InputHandler(LedDetector detector, AppState state, DetectionConfig config, ICameraSource camera, CameraConfig cameraConfig)
+        public InputHandler(LedDetector detector, AppState state, DetectionConfig config, ICameraSource camera, CameraConfig cameraConfig, AuthGate auth)
         {
             _detector = detector;
             _state = state;
             _config = config;
             _camera = camera;
             _cameraConfig = cameraConfig;
+            _auth = auth;
         }
+
+        public void UpdateColorSampler(Func<float, float, LedColor>? sampler) => _colorSampler = sampler;
 
         public void OnMouse(MouseEventTypes eventType, int x, int y, MouseEventFlags flags, IntPtr userData)
         {
+            if (!_auth.IsUnlocked) return;
+
             float nx = (float)(x / _state.DisplayScale);
             float ny = (float)(y / _state.DisplayScale);
 
@@ -48,7 +59,8 @@ namespace ComputerVision_LED_Console.App
                     }
                     else
                     {
-                        int newIdx = _detector.AddManualRoi(nx, ny);
+                        var color = _colorSampler?.Invoke(nx, ny) ?? LedColor.Unknown;
+                        int newIdx = _detector.AddManualRoi(nx, ny, color);
                         _state.DragMarkerIndex = newIdx;
                         _state.SelectedMarkerIndex = newIdx;
                     }
@@ -78,11 +90,27 @@ namespace ComputerVision_LED_Console.App
                     }
                     break;
                 }
+                case MouseEventTypes.MouseWheel:
+                {
+                    // OpenCV packs the wheel delta into the high 16 bits of `flags` as a signed short.
+                    // Typical OS reports +/-120 per notch; we only care about the sign.
+                    int sign = Math.Sign((short)(((int)flags >> 16) & 0xFFFF));
+                    if (sign == 0) break;
+
+                    int target = _detector.FindRoiAt(nx, ny);
+                    if (target < 0) target = _state.SelectedMarkerIndex;
+                    if (target < 0 || target >= _detector.Rois.Count) break;
+
+                    _detector.AdjustRoiRadius(target, sign * _config.RoiRadiusStep);
+                    _state.SelectedMarkerIndex = target;
+                    break;
+                }
             }
         }
 
         public KeyAction HandleKey(int key)
         {
+            // Always-allowed: quit, rescan, lock/unlock prompts.
             if (key == 'q' || key == 'Q' || key == 27) return KeyAction.Quit;
 
             if (key == 'r' || key == 'R')
@@ -92,6 +120,12 @@ namespace ComputerVision_LED_Console.App
                 _state.SelectedMarkerIndex = -1;
                 return KeyAction.Rescan;
             }
+
+            if (key == 'u' || key == 'U') return KeyAction.UnlockPrompt;
+            if (key == 'l' || key == 'L') return KeyAction.Lock;
+            if (key == 'p' || key == 'P') return KeyAction.PasswordToggle;
+
+            if (!_auth.IsUnlocked) return KeyAction.Continue;
 
             if (key == 's' || key == 'S')
             {

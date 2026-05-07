@@ -140,7 +140,9 @@ namespace ComputerVision_LED_Console.Network
 
                 int offset = 1 + count * 2;
                 output[offset] = (byte)led.MarkerId;
-                output[offset + 1] = (byte)led.Status;
+                // Status byte layout: high nibble = LedColor, low nibble = LedStatus.
+                // Both enums currently use values 0..3 so they fit comfortably in 4 bits each.
+                output[offset + 1] = (byte)(((int)led.Color << 4) | (int)led.Status);
                 count++;
             }
 

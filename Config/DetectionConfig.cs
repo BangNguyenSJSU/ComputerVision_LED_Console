@@ -12,6 +12,13 @@ namespace ComputerVision_LED_Console.Config
         public int MaxDetectRadius { get; set; } = 24;
         public int DefaultManualRadius { get; set; } = 6;
 
+        // Bounds and step for runtime ROI-radius adjustments (mouse wheel).
+        // Wider than auto-detect bounds because users may hand-place markers around
+        // larger fixtures the detector would otherwise reject.
+        public int MinRoiRadius { get; set; } = 1;
+        public int MaxRoiRadius { get; set; } = 200;
+        public int RoiRadiusStep { get; set; } = 1;
+
         // Yellow HSV range.
         public bool DetectYellow { get; set; } = true;
         public int HueLow { get; set; } = 20;
@@ -23,6 +30,11 @@ namespace ComputerVision_LED_Console.Config
         public int RedHueHigh1 { get; set; } = 10;
         public int RedHueLow2 { get; set; } = 170;
         public int RedHueHigh2 { get; set; } = 180;
+
+        // Green HSV range.
+        public bool DetectGreen { get; set; } = true;
+        public int GreenHueLow { get; set; } = 40;
+        public int GreenHueHigh { get; set; } = 85;
 
         // Shared saturation and value bounds for every enabled color band.
         public int SaturationLow { get; set; } = 100;

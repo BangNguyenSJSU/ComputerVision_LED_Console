@@ -12,6 +12,7 @@ namespace ComputerVision_LED_Console.Vision
         public double OffThreshold { get; set; }
 
         public LedStatus State { get; set; } = LedStatus.Off;
+        public LedColor Color { get; set; } = LedColor.Unknown;
         public double LastBrightness { get; set; }
         public int CalibrationPhase { get; set; }
     }

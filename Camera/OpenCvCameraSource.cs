@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.Versioning;
 using ComputerVision_LED_Console.Config;
 using ComputerVision_LED_Console.Utilities;
 using OpenCvSharp;
@@ -14,6 +15,7 @@ namespace ComputerVision_LED_Console.Camera
 
         private readonly CameraConfig _config;
         private VideoCapture? _capture;
+        private string _deviceName = "(unknown camera)";
 
         private double _uvcZoomBaseline;
         private double _uvcZoomRange = 250.0; // best-effort guess; Logitech range is opaque
@@ -37,15 +39,19 @@ namespace ComputerVision_LED_Console.Camera
         public double CurrentExposure { get; private set; }
         public bool AutoExposureOn { get; private set; }
 
+        [SupportedOSPlatform("windows")]
         public bool Open()
         {
             Logger.Info("Scanning for available cameras...");
             var available = CameraProbe.ScanAvailable(_config.MaxProbeIndex);
-            int chosen = CameraProbe.PromptUserSelection(available);
+            var names = CameraProbe.GetDirectShowVideoInputNames();
+            int chosen = CameraProbe.PromptUserSelection(available, names);
             if (chosen < 0)
             {
                 return false;
             }
+
+            _deviceName = (chosen >= 0 && chosen < names.Count) ? names[chosen] : "(unknown camera)";
 
             var capture = new VideoCapture(chosen, VideoCaptureAPIs.DSHOW);
             if (!capture.IsOpened())
@@ -87,7 +93,7 @@ namespace ComputerVision_LED_Console.Camera
             bool resOk = FrameWidth == reqW && FrameHeight == reqH;
             bool fpsOk = reqFps <= 0 || Math.Abs(FramesPerSecond - reqFps) / reqFps <= 0.05;
 
-            string summary = $"Camera negotiated: {FrameWidth}x{FrameHeight} @ {FramesPerSecond:F1} fps (requested {reqW}x{reqH} @ {reqFps:F0} fps, camera index {DeviceIndex}).";
+            string summary = $"Camera negotiated: '{_deviceName}' (index {DeviceIndex}) — {FrameWidth}x{FrameHeight} @ {FramesPerSecond:F1} fps (requested {reqW}x{reqH} @ {reqFps:F0} fps).";
 
             if (resOk && fpsOk)
             {
